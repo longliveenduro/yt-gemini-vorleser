@@ -1,0 +1,146 @@
+/*
+ * Optionsseite: Einstellungen laden/speichern, Stimmen der Sprache abrufen, Stimme testen.
+ */
+(function () {
+  'use strict';
+
+  const Settings = YTGR.settings;
+  const Tts = YTGR.googleTts;
+  const $ = (id) => document.getElementById(id);
+
+  const FIELDS = [
+    'apiKey', 'languageCode', 'voiceName', 'speakingRate', 'audioEncoding', 'pauseVideo', 'customPrompt',
+    'maxChars', 'askLabels', 'summarizeKeywords', 'askButtonSelector', 'panelSelector', 'responseTimeoutSec', 'debug',
+  ];
+
+  const GENDER = { MALE: 'männlich', FEMALE: 'weiblich', NEUTRAL: 'neutral' };
+
+  const SAMPLES = {
+    de: 'Hallo! Dies ist ein Test der Google-Sprachausgabe.',
+    en: 'Hello! This is a test of the Google voice output.',
+    fr: 'Bonjour ! Ceci est un test de la synthèse vocale de Google.',
+    es: '¡Hola! Esta es una prueba de la voz de Google.',
+    it: 'Ciao! Questa è una prova della voce di Google.',
+    nl: 'Hallo! Dit is een test van de Google-spraakuitvoer.',
+    pl: 'Cześć! To jest test mowy Google.',
+    pt: 'Olá! Este é um teste da voz do Google.',
+    ru: 'Привет! Это проверка голоса Google.',
+  };
+
+  function setStatus(el, text, kind) {
+    el.textContent = text;
+    el.classList.remove('ok', 'bad');
+    if (kind) el.classList.add(kind);
+  }
+
+  function updateRate() {
+    $('rateOut').textContent = Number($('speakingRate').value).toFixed(2).replace('.', ',');
+  }
+
+  function fill(settings) {
+    for (const key of FIELDS) {
+      const el = $(key);
+      if (el.type === 'checkbox') el.checked = Boolean(settings[key]);
+      else el.value = String(settings[key]);
+    }
+    updateRate();
+  }
+
+  function read() {
+    const raw = {};
+    for (const key of FIELDS) {
+      const el = $(key);
+      raw[key] = el.type === 'checkbox' ? el.checked : el.value;
+    }
+    return Settings.normalizeSettings(raw);
+  }
+
+  async function save(event) {
+    event.preventDefault();
+    const saved = await Settings.saveSettings(chrome.storage.local, read());
+    fill(saved);
+    setStatus($('saveStatus'), 'Gespeichert.', 'ok');
+    setTimeout(() => setStatus($('saveStatus'), ''), 3000);
+  }
+
+  async function loadVoices() {
+    const settings = read();
+    const status = $('voicesStatus');
+    if (!settings.apiKey) {
+      setStatus(status, 'Trage zuerst den API-Key ein.', 'bad');
+      return;
+    }
+    setStatus(status, 'Lade Stimmen …');
+    try {
+      const voices = await Tts.listVoices({
+        apiKey: settings.apiKey,
+        languageCode: settings.languageCode,
+        fetchImpl: (...args) => fetch(...args),
+      });
+      const list = $('voices');
+      list.textContent = '';
+      for (const v of voices) {
+        const option = document.createElement('option');
+        option.value = v.name;
+        option.label = `${v.type} · ${GENDER[v.gender] || v.gender}`;
+        list.appendChild(option);
+      }
+      if (voices.length) setStatus(status, `${voices.length} Stimmen geladen – klicke in das Feld „Stimme“, um sie zu sehen.`, 'ok');
+      else setStatus(status, 'Für diese Sprache wurden keine Stimmen gefunden.', 'bad');
+    } catch (e) {
+      setStatus(status, e.message || String(e), 'bad');
+    }
+  }
+
+  async function testVoice() {
+    const settings = read();
+    const status = $('testStatus');
+    const button = $('test');
+    button.disabled = true;
+    setStatus(status, 'Erzeuge Sprache …');
+    try {
+      const sample = SAMPLES[settings.languageCode.slice(0, 2)] || SAMPLES.en;
+      const res = await chrome.runtime.sendMessage({ type: 'YTGR_SPEAK', source: 'options', text: sample, settings });
+      if (!res || !res.ok) {
+        setStatus(status, (res && res.message) || 'Test fehlgeschlagen.', 'bad');
+        button.disabled = false;
+      }
+    } catch (e) {
+      setStatus(status, e.message || String(e), 'bad');
+      button.disabled = false;
+    }
+  }
+
+  // Ergebnis des Tests kommt asynchron vom Offscreen-Dokument (nur Meldungen ohne Tab-Bezug).
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (!msg || msg.type !== 'YTGR_TTS_STATUS' || msg.target !== 'background' || msg.tabId != null) return;
+    const status = $('testStatus');
+    if (msg.phase === 'speaking') {
+      setStatus(status, 'Wiedergabe läuft …', 'ok');
+    } else if (msg.phase === 'done' || msg.phase === 'stopped') {
+      setStatus(status, 'Test beendet.', 'ok');
+      $('test').disabled = false;
+    } else if (msg.phase === 'error') {
+      setStatus(status, msg.message || 'Fehler bei der Wiedergabe.', 'bad');
+      $('test').disabled = false;
+    }
+  });
+
+  $('speakingRate').addEventListener('input', updateRate);
+  $('toggleKey').addEventListener('click', () => {
+    const input = $('apiKey');
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    $('toggleKey').textContent = show ? 'Verbergen' : 'Anzeigen';
+    $('toggleKey').setAttribute('aria-pressed', String(show));
+  });
+  $('form').addEventListener('submit', save);
+  $('reset').addEventListener('click', () => {
+    fill({ ...Settings.DEFAULT_SETTINGS, apiKey: $('apiKey').value });
+    setStatus($('saveStatus'), 'Standardwerte geladen – zum Übernehmen speichern.');
+  });
+  $('loadVoices').addEventListener('click', loadVoices);
+  $('test').addEventListener('click', testVoice);
+
+  Settings.loadSettings(chrome.storage.local).then(fill);
+})();

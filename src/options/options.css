@@ -1,0 +1,210 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f3f5f7;
+  --surface: #ffffff;
+  --ink: #17212b;
+  --muted: #566372;
+  --line: #d3dae1;
+  --accent: #1d5f8a;
+  --accent-ink: #ffffff;
+  --focus: #1d5f8a;
+  --ok: #1f7a4d;
+  --bad: #b3261e;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14181d;
+    --surface: #1b2128;
+    --ink: #e8edf2;
+    --muted: #9aa7b4;
+    --line: #313b46;
+    --accent: #6bb3e0;
+    --accent-ink: #0b1620;
+    --focus: #8ec5ff;
+    --ok: #5fd39a;
+    --bad: #ff8a80;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 "Ubuntu", "Cantarell", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+main {
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+h1 {
+  margin: 0 0 0.5rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.lead {
+  max-width: 38rem;
+  margin: 0 0 2rem;
+  color: var(--muted);
+}
+
+section,
+details {
+  margin: 0 0 1.5rem;
+  padding: 1.25rem 1.25rem 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+summary {
+  margin: 0 0 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+details:not([open]) {
+  padding-bottom: 1.25rem;
+}
+
+details:not([open]) summary {
+  margin-bottom: 0;
+}
+
+.field {
+  margin: 0 0 1.1rem;
+}
+
+label {
+  display: block;
+  margin: 0 0 0.3rem;
+  font-weight: 500;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.check label {
+  margin: 0;
+  font-weight: 400;
+}
+
+.check input {
+  margin-top: 0.3rem;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input:not([type]),
+select,
+textarea {
+  width: 100%;
+  padding: 0.5rem 0.65rem;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+}
+
+input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 1rem;
+}
+
+.row input {
+  flex: 1;
+}
+
+.hint {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+button {
+  padding: 0.5rem 0.9rem;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover {
+  border-color: var(--muted);
+}
+
+button.primary {
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+[role="status"].ok {
+  color: var(--ok);
+}
+
+[role="status"].bad {
+  color: var(--bad);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button {
+    transition: border-color 120ms ease;
+  }
+}

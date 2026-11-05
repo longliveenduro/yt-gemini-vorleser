@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YouTube Gemini Vorleser – Optionen</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <main>
+      <h1>YouTube Gemini Vorleser</h1>
+      <p class="lead">
+        Ein Klick auf das Symbol der Erweiterung auf einer YouTube-Videoseite: Die Gemini-Funktion von YouTube („Ask“)
+        fasst das Video zusammen, Google Text-to-Speech liest die Zusammenfassung vor. Ein zweiter Klick stoppt.
+      </p>
+
+      <form id="form" autocomplete="off">
+        <section aria-labelledby="h-tts">
+          <h2 id="h-tts">Google Text-to-Speech</h2>
+
+          <div class="field">
+            <label for="apiKey">API-Key</label>
+            <div class="row">
+              <input id="apiKey" type="password" spellcheck="false" autocomplete="off" placeholder="AIza…" />
+              <button type="button" id="toggleKey" aria-pressed="false">Anzeigen</button>
+            </div>
+            <p class="hint">
+              API-Key eines Google-Cloud-Projekts, in dem die „Cloud Text-to-Speech API“ aktiviert ist. Er wird nur lokal in
+              diesem Browser gespeichert.
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="languageCode">Sprache der Zusammenfassung</label>
+            <input id="languageCode" list="languages" spellcheck="false" />
+            <datalist id="languages">
+              <option value="de-DE"></option>
+              <option value="en-US"></option>
+              <option value="en-GB"></option>
+              <option value="fr-FR"></option>
+              <option value="es-ES"></option>
+              <option value="it-IT"></option>
+              <option value="nl-NL"></option>
+              <option value="pl-PL"></option>
+              <option value="pt-BR"></option>
+              <option value="ru-RU"></option>
+              <option value="tr-TR"></option>
+              <option value="ja-JP"></option>
+              <option value="ko-KR"></option>
+              <option value="cmn-CN"></option>
+            </datalist>
+            <p class="hint">Wähle die Sprache, in der Gemini antwortet. Bei einem eigenen Prompt gilt die Sprache des Prompts.</p>
+          </div>
+
+          <div class="field">
+            <label for="voiceName">Stimme</label>
+            <div class="row">
+              <input id="voiceName" list="voices" spellcheck="false" />
+              <button type="button" id="loadVoices">Stimmen laden</button>
+            </div>
+            <datalist id="voices"></datalist>
+            <p class="hint" id="voicesStatus" role="status">
+              Leer lassen für die Standardstimme der Sprache. „Stimmen laden“ listet alle Stimmen der gewählten Sprache.
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="speakingRate">Geschwindigkeit: <output id="rateOut">1,00</output>×</label>
+            <input id="speakingRate" type="range" min="0.5" max="2" step="0.05" />
+          </div>
+
+          <div class="field">
+            <label for="audioEncoding">Audioformat</label>
+            <select id="audioEncoding">
+              <option value="OGG_OPUS">Ogg Opus (empfohlen)</option>
+              <option value="MP3">MP3</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <button type="button" id="test">Stimme testen</button>
+            <span id="testStatus" role="status"></span>
+          </div>
+        </section>
+
+        <section aria-labelledby="h-behavior">
+          <h2 id="h-behavior">Verhalten</h2>
+
+          <div class="field check">
+            <input id="pauseVideo" type="checkbox" />
+            <label for="pauseVideo">Video pausieren, sobald die Zusammenfassung vorgelesen wird</label>
+          </div>
+
+          <div class="field">
+            <label for="customPrompt">Eigener Prompt (optional)</label>
+            <textarea id="customPrompt" rows="3" spellcheck="false"></textarea>
+            <p class="hint">
+              Leer: Die Erweiterung klickt auf „Video zusammenfassen“. Mit Prompt wird stattdessen deine Frage an Gemini
+              gesendet, z. B. „Fasse das Video auf Deutsch in höchstens sechs Sätzen zusammen, ohne Aufzählungen.“
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="maxChars">Maximale Länge des vorgelesenen Textes (Zeichen)</label>
+            <input id="maxChars" type="number" min="500" max="20000" step="100" />
+          </div>
+        </section>
+
+        <details>
+          <summary>Erweitert – wenn YouTube die Oberfläche ändert</summary>
+
+          <div class="field">
+            <label for="askLabels">Beschriftungen des „Ask“-Buttons</label>
+            <textarea id="askLabels" rows="3" spellcheck="false"></textarea>
+            <p class="hint">Kommagetrennt, Groß-/Kleinschreibung egal, exakter Vergleich mit aria-label bzw. Text des Buttons.</p>
+          </div>
+
+          <div class="field">
+            <label for="summarizeKeywords">Stichwörter der Schaltfläche „Video zusammenfassen“</label>
+            <textarea id="summarizeKeywords" rows="2" spellcheck="false"></textarea>
+            <p class="hint">Kommagetrennt, Teilstring-Vergleich ohne Groß-/Kleinschreibung.</p>
+          </div>
+
+          <div class="field">
+            <label for="askButtonSelector">CSS-Selektor des „Ask“-Buttons</label>
+            <input id="askButtonSelector" spellcheck="false" placeholder="z. B. ytd-watch-metadata button[aria-label='Ask']" />
+            <p class="hint">Hat Vorrang vor den Beschriftungen.</p>
+          </div>
+
+          <div class="field">
+            <label for="panelSelector">CSS-Selektor des Gemini-Panels</label>
+            <input id="panelSelector" spellcheck="false" placeholder="z. B. ytd-engagement-panel-section-list-renderer[target-id*='ask']" />
+          </div>
+
+          <div class="field">
+            <label for="responseTimeoutSec">Zeitlimit für die Antwort von Gemini (Sekunden)</label>
+            <input id="responseTimeoutSec" type="number" min="15" max="300" step="5" />
+          </div>
+
+          <div class="field check">
+            <input id="debug" type="checkbox" />
+            <label for="debug">Diagnose immer in die Konsole schreiben (F12 → Konsole, Filter „YTGR“)</label>
+          </div>
+        </details>
+
+        <div class="actions">
+          <button type="submit" class="primary">Speichern</button>
+          <button type="button" id="reset">Standardwerte laden</button>
+          <span id="saveStatus" role="status"></span>
+        </div>
+      </form>
+    </main>
+
+    <script src="../lib/settings.js"></script>
+    <script src="../lib/google-tts.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>
