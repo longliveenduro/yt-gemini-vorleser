@@ -19,9 +19,14 @@ test('buildSynthesizeRequest erzeugt den erwarteten Körper', () => {
   });
 });
 
-test('buildSynthesizeRequest leitet die Sprache aus dem Stimmennamen ab (verhindert Sprach-/Stimmen-Konflikt)', () => {
+test('buildSynthesizeRequest: eine Stimme anderer Sprache überstimmt die gewählte Sprache nicht', () => {
   const s = normalizeSettings({ languageCode: 'en-US', voiceName: 'de-DE-Wavenet-F' });
-  assert.equal(tts.buildSynthesizeRequest({ text: 'x', settings: s }).voice.languageCode, 'de-DE');
+  assert.deepEqual(tts.buildSynthesizeRequest({ text: 'x', settings: s }).voice, { languageCode: 'en-US' });
+});
+
+test('buildSynthesizeRequest: Stimme derselben Hauptsprache (auch anderer Region) wird verwendet', () => {
+  const s = normalizeSettings({ languageCode: 'en-US', voiceName: 'en-GB-Neural2-A' });
+  assert.deepEqual(tts.buildSynthesizeRequest({ text: 'x', settings: s }).voice, { languageCode: 'en-GB', name: 'en-GB-Neural2-A' });
   assert.equal(tts.localeOf('cmn-CN-Wavenet-A', 'x'), 'cmn-CN');
   assert.equal(tts.localeOf('en-US-Chirp3-HD-Aoede', 'x'), 'en-US');
   assert.equal(tts.localeOf('', 'fr-FR'), 'fr-FR');

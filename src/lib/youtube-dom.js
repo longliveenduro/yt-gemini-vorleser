@@ -24,6 +24,11 @@
   const INPUT_EXCLUDE = 'ytd-commentbox, ytd-comments, #comments, ytd-searchbox, #search-form, ytd-transcript-search-panel-renderer';
   const SEND_TOKENS = ['send', 'senden', 'absenden', 'submit', 'enviar', 'envoyer', 'invia', 'verstuur', 'wyślij', 'отправ', '送信', '보내', '发送'];
   const NOT_SEND = /feedback|rückmeld|report|melden/;
+  // Beschriftungen des „Teilen“-Buttons: Ausweich-Anker für den eigenen Button, wenn „Ask“ fehlt.
+  const SHARE_LABELS = [
+    'share', 'teilen', 'compartir', 'partager', 'condividi', 'compartilhar', 'delen', 'udostępnij',
+    'поделиться', '共有', '공유', '分享', 'paylaş', 'dela',
+  ];
 
   const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'SVG', 'NOSCRIPT', 'TEMPLATE', 'BUTTON', 'TEXTAREA', 'INPUT', 'SELECT', 'IMG', 'VIDEO', 'AUDIO', 'CANVAS', 'IFRAME']);
   const BLOCK_TAGS = new Set([
@@ -194,6 +199,32 @@
     return null;
   }
 
+  /** „Teilen“-Button unter dem Video (feste, mehrsprachige Beschriftungsliste). */
+  function findShareButton(doc) {
+    const wanted = new Set(SHARE_LABELS);
+    for (const el of queryAllDeep(findActionScope(doc), BUTTON_SELECTOR)) {
+      if (isVisible(el) && getLabels(el).some((l) => wanted.has(l))) return el;
+    }
+    return null;
+  }
+
+  /**
+   * Das Element der Aktionsleiste, hinter dem ein eigener Button eingefügt werden kann: der Eintrag der Leiste
+   * (nicht der innere Button), der „Ask“ – sonst „Teilen“ – enthält. Die Leiste ist der nächste Vorfahre mit
+   * mindestens drei sichtbaren Buttons.
+   */
+  function findButtonSlot(doc, opts) {
+    const anchor = findAskButton(doc, opts) || findShareButton(doc);
+    if (!anchor) return null;
+    let child = anchor;
+    for (let i = 0; i < 8 && child.parentElement; i += 1) {
+      const parent = child.parentElement;
+      if (queryAllDeep(parent, BUTTON_SELECTOR).filter(isVisible).length >= 3) return child;
+      child = parent;
+    }
+    return anchor;
+  }
+
   /**
    * Findet die geöffnete Gemini-Oberfläche: { panel, chip, input } oder null.
    * Ein Panel zählt nur, wenn es eine Zusammenfassen-Schaltfläche oder ein Eingabefeld enthält.
@@ -230,6 +261,36 @@
     if (!inserted) {
       input.textContent = text;
       input.dispatchEvent(new win.InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+    }
+  }
+
+  /** Das Eingabefeld enthält keinen Text (mehr). */
+  function inputIsEmpty(input) {
+    const value = typeof input.value === 'string' ? input.value : input.textContent;
+    return String(value || '').trim() === '';
+  }
+
+  /** Eingabefeld leeren (z. B. nach einem Prompt, der nicht gesendet wurde). */
+  function clearPromptText(input) {
+    const win = input.ownerDocument.defaultView;
+    input.focus();
+    if (input.tagName === 'TEXTAREA' || input.tagName === 'INPUT') {
+      const proto = input.tagName === 'TEXTAREA' ? win.HTMLTextAreaElement.prototype : win.HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(proto, 'value').set.call(input, '');
+      input.dispatchEvent(new win.Event('input', { bubbles: true }));
+      return;
+    }
+    const doc = input.ownerDocument;
+    let cleared = false;
+    try {
+      doc.execCommand('selectAll', false);
+      cleared = doc.execCommand('delete', false);
+    } catch (_) {
+      cleared = false;
+    }
+    if (!cleared) {
+      input.textContent = '';
+      input.dispatchEvent(new win.InputEvent('input', { bubbles: true, inputType: 'deleteContentBackward' }));
     }
   }
 
@@ -360,8 +421,12 @@
     findSummarizeChip,
     findPromptInput,
     findSendButton,
+    findShareButton,
+    findButtonSlot,
     locateAskUi,
     setPromptText,
+    inputIsEmpty,
+    clearPromptText,
     pressEnter,
     submitPrompt,
     collectText,

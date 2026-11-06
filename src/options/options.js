@@ -9,8 +9,9 @@
   const $ = (id) => document.getElementById(id);
 
   const FIELDS = [
-    'apiKey', 'languageCode', 'voiceName', 'speakingRate', 'audioEncoding', 'pauseVideo', 'customPrompt',
-    'maxChars', 'askLabels', 'summarizeKeywords', 'askButtonSelector', 'panelSelector', 'responseTimeoutSec', 'debug',
+    'apiKey', 'languageCode', 'requestMode', 'voiceName', 'speakingRate', 'audioEncoding', 'pauseVideo', 'pageButton',
+    'customPrompt', 'maxChars', 'askLabels', 'summarizeKeywords', 'askButtonSelector', 'panelSelector',
+    'responseTimeoutSec', 'debug',
   ];
 
   const GENDER = { MALE: 'männlich', FEMALE: 'weiblich', NEUTRAL: 'neutral' };
@@ -37,7 +38,29 @@
     $('rateOut').textContent = Number($('speakingRate').value).toFixed(2).replace('.', ',');
   }
 
+  /** Sprachauswahl aus der Liste in settings.js aufbauen. */
+  function fillLanguages() {
+    const select = $('languageCode');
+    for (const language of Settings.LANGUAGES) {
+      const option = document.createElement('option');
+      option.value = language.code;
+      option.textContent = language.label;
+      select.appendChild(option);
+    }
+  }
+
+  /** Ein gespeicherter Sprachcode, der nicht in der Liste steht, bleibt als eigene Option erhalten. */
+  function ensureLanguageOption(code) {
+    const select = $('languageCode');
+    if ([...select.options].some((o) => o.value === code)) return;
+    const option = document.createElement('option');
+    option.value = code;
+    option.textContent = code;
+    select.appendChild(option);
+  }
+
   function fill(settings) {
+    ensureLanguageOption(settings.languageCode);
     for (const key of FIELDS) {
       const el = $(key);
       if (el.type === 'checkbox') el.checked = Boolean(settings[key]);
@@ -61,6 +84,24 @@
     fill(saved);
     setStatus($('saveStatus'), 'Gespeichert.', 'ok');
     setTimeout(() => setStatus($('saveStatus'), ''), 3000);
+  }
+
+  /** Nach einem Sprachwechsel passt die bisherige Stimme evtl. nicht mehr. */
+  function onLanguageChange() {
+    const language = $('languageCode').value;
+    const voice = $('voiceName').value.trim();
+    const german = Settings.primaryLanguage(language) === 'de';
+    const voiceLocale = Tts.localeOf(voice, null);
+    const mismatch = voice && voiceLocale && Settings.primaryLanguage(voiceLocale) !== Settings.primaryLanguage(language);
+    if (mismatch || (!voice && german)) {
+      $('voiceName').value = german ? Settings.DEFAULT_SETTINGS.voiceName : '';
+      setStatus(
+        $('voicesStatus'),
+        german
+          ? 'Stimme auf die Standardstimme für Deutsch gesetzt.'
+          : 'Stimme zurückgesetzt (Standardstimme der Sprache). „Stimmen laden“ zeigt passende Stimmen.',
+      );
+    }
   }
 
   async function loadVoices() {
@@ -126,6 +167,7 @@
     }
   });
 
+  $('languageCode').addEventListener('change', onLanguageChange);
   $('speakingRate').addEventListener('input', updateRate);
   $('toggleKey').addEventListener('click', () => {
     const input = $('apiKey');
@@ -142,5 +184,6 @@
   $('loadVoices').addEventListener('click', loadVoices);
   $('test').addEventListener('click', testVoice);
 
+  fillLanguages();
   Settings.loadSettings(chrome.storage.local).then(fill);
 })();

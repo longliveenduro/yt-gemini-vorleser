@@ -2,9 +2,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createRunner, DEFAULT_PROMPT } = require('../src/lib/runner.js');
-const { normalizeSettings } = require('../src/lib/settings.js');
+const { createRunner } = require('../src/lib/runner.js');
+const { normalizeSettings, buildSummaryPrompt } = require('../src/lib/settings.js');
 const { createWatchPage, FAST_TIMING, EXPECTED_DEFAULT_TEXT } = require('./helpers/fake-youtube.js');
+
+const DE_PROMPT = buildSummaryPrompt(normalizeSettings({}));
 
 function recordingUi() {
   const ui = {
@@ -38,12 +40,14 @@ function setup({ page: pageOptions = {}, settings = {}, timing = {}, send } = {}
   return { page, ui, sent, runner };
 }
 
-test('Ablauf (EN): Ask öffnen → „Summarize the video“ → bereinigten Text zum Vorlesen senden', async () => {
+test('Standard: Ask öffnen → Prompt in der gewählten Sprache (Deutsch) senden → bereinigten Text zum Vorlesen senden', async () => {
   const { page, ui, sent, runner } = setup();
   const result = await runner.run();
   assert.equal(result.ok, true);
   assert.equal(page.state.askClicks, 1);
-  assert.equal(page.state.chipClicks, 1);
+  assert.deepEqual(page.state.sent, [DE_PROMPT]);
+  assert.match(DE_PROMPT, /auf Deutsch zusammen/);
+  assert.equal(page.state.chipClicks, 0, 'der Vorschlag von YouTube wird nicht gebraucht');
   assert.equal(sent.length, 1);
   assert.equal(sent[0].type, 'YTGR_SPEAK');
   assert.equal(sent[0].text, EXPECTED_DEFAULT_TEXT);
@@ -51,8 +55,28 @@ test('Ablauf (EN): Ask öffnen → „Summarize the video“ → bereinigten Tex
   assert.ok(ui.statuses.some((s) => /Öffne Gemini/.test(s)));
 });
 
-test('Ablauf (DE): deutsche Beschriftungen „Fragen“ und „Video zusammenfassen“', async () => {
-  const { page, sent, runner } = setup({ page: { askLabel: 'Fragen', chipLabel: 'Video zusammenfassen' } });
+test('die Sprache ist einstellbar: Englisch verlangt eine englische Antwort', async () => {
+  const { page, runner } = setup({ settings: { languageCode: 'en-US' } });
+  assert.equal((await runner.run()).ok, true);
+  assert.equal(page.state.sent.length, 1);
+  assert.match(page.state.sent[0], /Summarize this video/);
+  assert.match(page.state.sent[0], /Respond in English/);
+});
+
+test('Modus „YouTube-Vorschlag“: „Summarize the video“ wird angeklickt, nichts getippt', async () => {
+  const { page, sent, runner } = setup({ settings: { requestMode: 'chip' } });
+  const result = await runner.run();
+  assert.equal(result.ok, true);
+  assert.equal(page.state.chipClicks, 1);
+  assert.deepEqual(page.state.sent, []);
+  assert.equal(sent[0].text, EXPECTED_DEFAULT_TEXT);
+});
+
+test('Modus „YouTube-Vorschlag“ mit deutschen Beschriftungen „Fragen“ und „Video zusammenfassen“', async () => {
+  const { page, sent, runner } = setup({
+    page: { askLabel: 'Fragen', chipLabel: 'Video zusammenfassen' },
+    settings: { requestMode: 'chip' },
+  });
   const result = await runner.run();
   assert.equal(result.ok, true);
   assert.equal(page.state.chipClicks, 1);
@@ -72,28 +96,51 @@ test('ist das Panel schon offen, wird „Ask“ nicht noch einmal geklickt (sons
   const result = await runner.run();
   assert.equal(result.ok, true);
   assert.equal(page.state.askClicks, 0);
-  assert.equal(page.state.chipClicks, 1);
+  assert.deepEqual(page.state.sent, [DE_PROMPT]);
   assert.equal(sent[0].text, EXPECTED_DEFAULT_TEXT);
 });
 
 test('wiederholter Lauf im selben Panel: nur die neue Antwort wird vorgelesen', async () => {
   const { page, sent, runner } = setup();
   await runner.run();
-  // zweite Runde: neues Vorschlags-Chip „Summarize the video“ erscheint wieder
-  page.panel.querySelector('.chips').insertAdjacentHTML('beforeend', '<button>Summarize the video</button>');
   await runner.run();
   assert.equal(page.state.askClicks, 1, 'Panel war offen');
+  assert.equal(page.state.sent.length, 2);
   assert.equal(sent.length, 2);
   assert.equal(sent[1].text, EXPECTED_DEFAULT_TEXT);
 });
 
-test('unbekannte Chip-Beschriftung → Rückfall: Standard-Prompt wird ins Eingabefeld getippt', async () => {
-  const { page, sent, runner } = setup({ page: { chipLabel: 'Zeig mir alles' } });
+test('RÜCKFALL: wird der Prompt nicht abgeschickt, springt der Ablauf auf den YouTube-Vorschlag und leert das Feld', async () => {
+  const { page, ui, sent, runner } = setup({ page: { ignoreTyped: true } });
+  const result = await runner.run();
+  assert.equal(result.ok, true);
+  assert.equal(page.state.chipClicks, 1);
+  assert.equal(page.panel.querySelector('textarea').value, '', 'nicht gesendeter Prompt wurde entfernt');
+  assert.ok(ui.statuses.some((m) => /Vorschlag von YouTube/.test(m)), 'Hinweis auf den Rückfall');
+  assert.equal(sent[0].text, EXPECTED_DEFAULT_TEXT);
+});
+
+test('RÜCKFALL: ohne Eingabefeld im Panel wird der YouTube-Vorschlag verwendet', async () => {
+  const { page, sent, runner } = setup({ page: { withInput: false } });
+  const result = await runner.run();
+  assert.equal(result.ok, true);
+  assert.equal(page.state.chipClicks, 1);
+  assert.equal(sent[0].text, EXPECTED_DEFAULT_TEXT);
+});
+
+test('RÜCKFALL: im Modus „Vorschlag“ ohne passenden Chip wird der Prompt getippt', async () => {
+  const { page, sent, runner } = setup({ page: { chipLabel: 'Zeig mir alles' }, settings: { requestMode: 'chip' } });
   const result = await runner.run();
   assert.equal(result.ok, true);
   assert.equal(page.state.chipClicks, 0);
-  assert.deepEqual(page.state.sent, [DEFAULT_PROMPT]);
+  assert.deepEqual(page.state.sent, [DE_PROMPT]);
   assert.equal(sent[0].text, EXPECTED_DEFAULT_TEXT);
+});
+
+test('Platzhalter {sprache} und {language} im eigenen Prompt werden ersetzt', async () => {
+  const { page, runner } = setup({ settings: { customPrompt: 'Fasse auf {sprache} zusammen ({language}).', languageCode: 'de-DE' } });
+  await runner.run();
+  assert.deepEqual(page.state.sent, ['Fasse auf Deutsch zusammen (German).']);
 });
 
 test('eigener Prompt hat Vorrang vor dem Chip und fasst Eingabe-Echo nicht als Antwort auf', async () => {
@@ -181,12 +228,13 @@ test('Panel öffnet sich nicht → PANEL_NOT_FOUND mit Hinweis auf die Optionen'
   assert.equal(ui.errors[0].options, true);
 });
 
-test('eigener Prompt, aber kein Eingabefeld im Panel → NO_PROMPT_TARGET', async () => {
-  const { page, sent, runner } = setup({ page: { withInput: false }, settings: { customPrompt: 'Frage' } });
+test('Prompt wird nicht gesendet und es gibt keinen Vorschlag → NO_PROMPT_TARGET', async () => {
+  const { page, ui, sent, runner } = setup({ page: { chipLabel: null, ignoreTyped: true } });
   const result = await runner.run();
   assert.equal(result.code, 'NO_PROMPT_TARGET');
-  assert.equal(page.state.chipClicks, 0);
+  assert.equal(page.panel.querySelector('textarea').value, '');
   assert.equal(sent.length, 0);
+  assert.match(ui.errors[0].title, /nicht angefordert/);
 });
 
 test('Panel ohne Chip und ohne Eingabefeld wird nicht als Gemini-Panel erkannt → PANEL_NOT_FOUND', async () => {

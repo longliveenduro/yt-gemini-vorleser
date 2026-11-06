@@ -165,3 +165,61 @@ test('Statusmeldungen, die zu einem YouTube-Tab gehören, ändern die Testanzeig
   listeners.forEach((l) => l({ type: 'YTGR_TTS_STATUS', target: 'background', tabId: 7, phase: 'error', message: 'x' }));
   assert.equal($('testStatus').textContent, '');
 });
+
+test('Sprachauswahl: alle Sprachen aus settings.js, Deutsch ist vorausgewählt', async () => {
+  const { $, window } = await loadOptions();
+  const select = $('languageCode');
+  assert.equal(select.tagName, 'SELECT');
+  const values = [...select.options].map((o) => o.value);
+  assert.ok(values.length >= 10);
+  assert.equal(select.value, 'de-DE');
+  assert.equal(select.options[0].textContent, 'Deutsch');
+  assert.ok(values.includes('en-US') && values.includes('fr-FR'));
+  assert.ok(window.YTGR.settings.LANGUAGES.every((l) => values.includes(l.code)));
+});
+
+test('ein gespeicherter Sprachcode, der nicht in der Liste steht, geht nicht verloren', async () => {
+  const { $, window } = await loadOptions({ stored: { languageCode: 'sv-SE', voiceName: '' } });
+  assert.equal($('languageCode').value, 'sv-SE');
+  $('form').dispatchEvent(new window.Event('submit', { cancelable: true, bubbles: true }));
+  await tick();
+  assert.equal($('languageCode').value, 'sv-SE');
+});
+
+test('neue Felder: Anforderungsmodus und Seiten-Button werden geladen und gespeichert', async () => {
+  const { $, store, window } = await loadOptions({ stored: { requestMode: 'chip', pageButton: false } });
+  assert.equal($('requestMode').value, 'chip');
+  assert.equal($('pageButton').checked, false);
+  $('requestMode').value = 'prompt';
+  $('pageButton').checked = true;
+  $('form').dispatchEvent(new window.Event('submit', { cancelable: true, bubbles: true }));
+  await tick();
+  assert.equal(store.settings.requestMode, 'prompt');
+  assert.equal(store.settings.pageButton, true);
+});
+
+test('Standard beim ersten Öffnen: Prompt-Modus und Seiten-Button an', async () => {
+  const { $ } = await loadOptions();
+  assert.equal($('requestMode').value, 'prompt');
+  assert.equal($('pageButton').checked, true);
+});
+
+test('Sprachwechsel auf Englisch setzt die deutsche Stimme zurück (sonst würde Englisch deutsch gesprochen)', async () => {
+  const { $, window } = await loadOptions();
+  assert.equal($('voiceName').value, 'de-DE-Neural2-B');
+  $('languageCode').value = 'en-US';
+  $('languageCode').dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal($('voiceName').value, '');
+  assert.match($('voicesStatus').textContent, /zurückgesetzt/);
+});
+
+test('Sprachwechsel behält eine passende Stimme und setzt für Deutsch die Standardstimme', async () => {
+  const { $, window } = await loadOptions({ stored: { languageCode: 'en-US', voiceName: 'en-GB-Neural2-A' } });
+  $('languageCode').value = 'en-GB';
+  $('languageCode').dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal($('voiceName').value, 'en-GB-Neural2-A', 'gleiche Hauptsprache → Stimme bleibt');
+
+  $('languageCode').value = 'de-DE';
+  $('languageCode').dispatchEvent(new window.Event('change', { bubbles: true }));
+  assert.equal($('voiceName').value, 'de-DE-Neural2-B');
+});

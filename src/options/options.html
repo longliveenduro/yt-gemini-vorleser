@@ -10,11 +10,52 @@
     <main>
       <h1>YouTube Gemini Vorleser</h1>
       <p class="lead">
-        Ein Klick auf das Symbol der Erweiterung auf einer YouTube-Videoseite: Die Gemini-Funktion von YouTube („Ask“)
-        fasst das Video zusammen, Google Text-to-Speech liest die Zusammenfassung vor. Ein zweiter Klick stoppt.
+        Ein Klick auf das Symbol der Erweiterung oder auf den Button „Vorlesen“ unter einem YouTube-Video: Die
+        Gemini-Funktion von YouTube („Ask“) fasst das Video zusammen, Google Text-to-Speech liest die Zusammenfassung
+        vor. Ein zweiter Klick stoppt.
       </p>
 
       <form id="form" autocomplete="off">
+        <section aria-labelledby="h-summary">
+          <h2 id="h-summary">Zusammenfassung</h2>
+
+          <div class="field">
+            <label for="languageCode">Sprache der Zusammenfassung und der Sprachausgabe</label>
+            <select id="languageCode"></select>
+            <p class="hint">
+              Gemini wird gebeten, in dieser Sprache zu antworten, und die Sprachausgabe verwendet dieselbe Sprache.
+              Wechselst du die Sprache, wird eine nicht passende Stimme zurückgesetzt.
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="requestMode">Zusammenfassung anfordern über</label>
+            <select id="requestMode">
+              <option value="prompt">Eigener Prompt in der gewählten Sprache (empfohlen)</option>
+              <option value="chip">Vorschlag „Video zusammenfassen“ von YouTube (Sprache bestimmt YouTube)</option>
+            </select>
+            <p class="hint">
+              Beim Prompt bestimmt die Sprache oben die Antwort. Klappt die jeweilige Variante nicht, versucht die
+              Erweiterung automatisch die andere.
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="customPrompt">Eigener Prompt (optional)</label>
+            <textarea id="customPrompt" rows="3" spellcheck="false"></textarea>
+            <p class="hint">
+              Leer: Die Erweiterung verwendet einen Standard-Prompt in der gewählten Sprache. Ein eigener Prompt ersetzt
+              ihn. Platzhalter: <code>{sprache}</code> (z. B. „Deutsch“) und <code>{language}</code> (z. B. „German“),
+              etwa „Fasse das Video auf {sprache} in höchstens sechs Sätzen zusammen, ohne Aufzählungen.“
+            </p>
+          </div>
+
+          <div class="field">
+            <label for="maxChars">Maximale Länge des vorgelesenen Textes (Zeichen)</label>
+            <input id="maxChars" type="number" min="500" max="20000" step="100" />
+          </div>
+        </section>
+
         <section aria-labelledby="h-tts">
           <h2 id="h-tts">Google Text-to-Speech</h2>
 
@@ -28,28 +69,6 @@
               API-Key eines Google-Cloud-Projekts, in dem die „Cloud Text-to-Speech API“ aktiviert ist. Er wird nur lokal in
               diesem Browser gespeichert.
             </p>
-          </div>
-
-          <div class="field">
-            <label for="languageCode">Sprache der Zusammenfassung</label>
-            <input id="languageCode" list="languages" spellcheck="false" />
-            <datalist id="languages">
-              <option value="de-DE"></option>
-              <option value="en-US"></option>
-              <option value="en-GB"></option>
-              <option value="fr-FR"></option>
-              <option value="es-ES"></option>
-              <option value="it-IT"></option>
-              <option value="nl-NL"></option>
-              <option value="pl-PL"></option>
-              <option value="pt-BR"></option>
-              <option value="ru-RU"></option>
-              <option value="tr-TR"></option>
-              <option value="ja-JP"></option>
-              <option value="ko-KR"></option>
-              <option value="cmn-CN"></option>
-            </datalist>
-            <p class="hint">Wähle die Sprache, in der Gemini antwortet. Bei einem eigenen Prompt gilt die Sprache des Prompts.</p>
           </div>
 
           <div class="field">
@@ -91,18 +110,9 @@
             <label for="pauseVideo">Video pausieren, sobald die Zusammenfassung vorgelesen wird</label>
           </div>
 
-          <div class="field">
-            <label for="customPrompt">Eigener Prompt (optional)</label>
-            <textarea id="customPrompt" rows="3" spellcheck="false"></textarea>
-            <p class="hint">
-              Leer: Die Erweiterung klickt auf „Video zusammenfassen“. Mit Prompt wird stattdessen deine Frage an Gemini
-              gesendet, z. B. „Fasse das Video auf Deutsch in höchstens sechs Sätzen zusammen, ohne Aufzählungen.“
-            </p>
-          </div>
-
-          <div class="field">
-            <label for="maxChars">Maximale Länge des vorgelesenen Textes (Zeichen)</label>
-            <input id="maxChars" type="number" min="500" max="20000" step="100" />
+          <div class="field check">
+            <input id="pageButton" type="checkbox" />
+            <label for="pageButton">Button „Vorlesen“ auf der YouTube-Seite anzeigen (neben „Ask“ bzw. „Teilen“)</label>
           </div>
         </section>
 

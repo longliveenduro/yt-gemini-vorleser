@@ -74,8 +74,10 @@ test('Content-Skripte stehen in der richtigen Reihenfolge (Abhängigkeiten zuers
   const list = manifest.content_scripts[0].js;
   const idx = (name) => list.indexOf(`src/lib/${name}.js`);
   for (const dep of ['text', 'settings', 'messages', 'youtube-dom']) assert.ok(idx(dep) < idx('runner'), `${dep} vor runner`);
+  assert.ok(idx('youtube-dom') < idx('page-button'), 'page-button braucht youtube-dom');
   assert.ok(idx('overlay') < list.indexOf('src/content.js'));
   assert.ok(idx('runner') < list.indexOf('src/content.js'));
+  assert.ok(idx('page-button') < list.indexOf('src/content.js'));
 });
 
 test('HTML-Seiten haben keine Inline-Skripte (MV3-CSP) und laden vorhandene Skripte in sinnvoller Reihenfolge', () => {

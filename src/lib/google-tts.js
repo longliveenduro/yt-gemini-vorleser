@@ -26,9 +26,19 @@
     return m ? m[1] : fallback;
   }
 
+  function primary(code) {
+    return String(code || '').toLowerCase().split('-')[0];
+  }
+
+  /**
+   * Die gewählte Sprache bestimmt, was gesprochen wird. Eine Stimme wird nur verwendet, wenn sie zur selben
+   * Hauptsprache gehört (en-GB-Stimme bei en-US ist in Ordnung, eine deutsche Stimme bei Englisch nicht).
+   */
   function buildSynthesizeRequest({ text, settings }) {
-    const voice = { languageCode: localeOf(settings.voiceName, settings.languageCode) };
-    if (settings.voiceName) voice.name = settings.voiceName;
+    const voiceLocale = localeOf(settings.voiceName, null);
+    const useVoice = Boolean(settings.voiceName && voiceLocale && primary(voiceLocale) === primary(settings.languageCode));
+    const voice = { languageCode: useVoice ? voiceLocale : settings.languageCode };
+    if (useVoice) voice.name = settings.voiceName;
     return {
       input: { text },
       voice,

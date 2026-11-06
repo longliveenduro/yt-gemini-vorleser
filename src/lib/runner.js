@@ -2,7 +2,8 @@
  * Der Ablauf nach dem Klick auf das Erweiterungs-Symbol (läuft im Content-Script):
  *  1. prüfen: Video-Seite, API-Key vorhanden
  *  2. „Ask“-Button finden und klicken – fehlt er: Diagnose (Geofencing → VPN-Hinweis in die USA)
- *  3. „Video zusammenfassen“ anklicken (oder eigenen Prompt eintippen)
+ *  3. Zusammenfassung anfordern: Prompt in der gewählten Sprache eintippen (Standard) oder den Vorschlag
+ *     „Video zusammenfassen“ anklicken – bei Misserfolg wird jeweils die andere Variante versucht
  *  4. Antwort abwarten (Text ändert sich eine Weile nicht mehr), bereinigen
  *  5. an den Hintergrunddienst zum Vorlesen übergeben
  * Alle Abhängigkeiten werden übergeben, damit der Ablauf mit jsdom getestet werden kann.
@@ -23,12 +24,11 @@
     askButtonTimeoutMs: 6000,
     panelTimeoutMs: 8000,
     chipTimeoutMs: 6000,
+    sendButtonWaitMs: 800,
+    sendCheckMs: 4000,
     stableMs: 3000,
     minAnswerChars: 40,
   };
-
-  const DEFAULT_PROMPT =
-    'Fasse dieses Video in wenigen Sätzen zusammen. Antworte als Fließtext ohne Aufzählungen und ohne Zeitangaben.';
 
   // Bei diesen Fehlern hilft eine Momentaufnahme der Seite bei der Fehlersuche.
   const DIAGNOSE_CODES = new Set(['GEOFENCE', 'NOT_AVAILABLE', 'PANEL_NOT_FOUND', 'NO_PROMPT_TARGET', 'NO_ANSWER', 'PAGE_NOT_READY']);
@@ -93,6 +93,67 @@
       }
     }
 
+    /** Vorschlag „Video zusammenfassen“ anklicken. Gibt { panel, baseline, echo } zurück oder null. */
+    async function tryChip(located, opts) {
+      let current = located;
+      if (!current.chip) {
+        const again = await waitFor(() => {
+          const a = dom.locateAskUi(document, opts);
+          return a && a.chip ? a : null;
+        }, t.chipTimeoutMs);
+        if (!again) return null;
+        current = again;
+      }
+      const baseline = dom.collectText(current.panel);
+      ui.status('Fordere Zusammenfassung an …');
+      current.chip.click();
+      return { panel: current.panel, baseline, echo: dom.getLabels(current.chip) };
+    }
+
+    /**
+     * Prompt in der gewählten Sprache ins Eingabefeld tippen und absenden. Gilt nur als gesendet, wenn das Feld
+     * danach leer ist oder im Panel neuer Text erscheint – sonst wird das Feld geleert und null zurückgegeben.
+     */
+    async function tryType(located, settings) {
+      const input = located.input || dom.findPromptInput(located.panel);
+      if (!input) return null;
+      const prompt = settingsLib.buildSummaryPrompt(settings);
+      const baseline = dom.collectText(located.panel);
+      ui.status('Sende Frage an Gemini …');
+      dom.setPromptText(input, prompt);
+      if (dom.inputIsEmpty(input)) return null; // Eingabe wurde nicht übernommen
+      await waitFor(() => dom.findSendButton(located.panel), t.sendButtonWaitMs); // Button wird erst nach der Eingabe aktiv
+      dom.submitPrompt(located.panel, input);
+      const accepted = await waitFor(
+        () => dom.inputIsEmpty(input) || text.diffLines(baseline, dom.collectText(located.panel)).length > 0,
+        t.sendCheckMs,
+      );
+      if (!accepted) {
+        dom.clearPromptText(input);
+        return null;
+      }
+      return { panel: located.panel, baseline, echo: [prompt] };
+    }
+
+    /** Fordert die Zusammenfassung an – in der bevorzugten Variante, bei Misserfolg in der anderen. */
+    async function requestSummary(settings, opts, located) {
+      const order = settings.requestMode === 'chip' ? ['chip', 'type'] : ['type', 'chip'];
+      let current = located;
+      for (let i = 0; i < order.length; i += 1) {
+        current = dom.locateAskUi(document, opts) || current;
+        const started = order[i] === 'chip' ? await tryChip(current, opts) : await tryType(current, settings);
+        if (started) return started;
+        if (i + 1 < order.length) {
+          ui.status(
+            order[i] === 'type'
+              ? 'Eingabe nicht möglich – verwende den Vorschlag von YouTube (Antwortsprache bestimmt YouTube) …'
+              : 'Vorschlag nicht gefunden – sende eigenen Prompt …',
+          );
+        }
+      }
+      throw new UserError('NO_PROMPT_TARGET');
+    }
+
     async function runFlow(settings) {
       if (!dom.isWatchUrl(location.href)) throw new UserError('NOT_WATCH_PAGE');
       if (!settings.apiKey) throw new UserError('NO_API_KEY');
@@ -122,34 +183,8 @@
         if (!located) throw new UserError('PANEL_NOT_FOUND');
       }
 
-      // 2) Eigener Prompt hat Vorrang; sonst „Video zusammenfassen“, ersatzweise Standard-Prompt.
-      const customPrompt = settings.customPrompt;
-      let route = customPrompt ? 'type' : 'chip';
-      if (route === 'chip' && !located.chip) {
-        const again = await waitFor(() => {
-          const a = dom.locateAskUi(document, opts);
-          return a && a.chip ? a : null;
-        }, t.chipTimeoutMs);
-        if (again) located = again;
-        else route = 'type';
-      }
-
-      const panel = located.panel;
-      const baseline = dom.collectText(panel);
-      let echo;
-      if (route === 'chip') {
-        echo = dom.getLabels(located.chip);
-        ui.status('Fordere Zusammenfassung an …');
-        located.chip.click();
-      } else {
-        const input = located.input || dom.findPromptInput(panel);
-        if (!input) throw new UserError('NO_PROMPT_TARGET');
-        const prompt = customPrompt || DEFAULT_PROMPT;
-        echo = [prompt];
-        ui.status('Sende Frage an Gemini …');
-        dom.setPromptText(input, prompt);
-        dom.submitPrompt(panel, input);
-      }
+      // 2) Zusammenfassung anfordern (Prompt in der gewählten Sprache bzw. YouTube-Vorschlag)
+      const { panel, baseline, echo } = await requestSummary(settings, opts, located);
 
       // 3) Antwort abwarten und aufbereiten
       ui.status('Gemini fasst das Video zusammen …');
@@ -205,5 +240,5 @@
     return { run, abort, isBusy: () => busy };
   }
 
-  return { createRunner, DEFAULT_TIMING, DEFAULT_PROMPT };
+  return { createRunner, DEFAULT_TIMING };
 });

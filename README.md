@@ -5,7 +5,9 @@ Chrome-Erweiterung für YouTube: Ein Klick auf das Symbol, und die in YouTube ei
 [![CI](../../actions/workflows/ci.yml/badge.svg)](../../actions/workflows/ci.yml)
 
 - Läuft unter **Ubuntu** (Google Chrome oder Chromium), ohne native Abhängigkeiten: Die Sprache kommt per HTTPS von Google, die Wiedergabe übernimmt der Browser.
-- Alle Einstellungen liegen in den Optionen der Erweiterung (API-Key, Sprache, Stimme, Tempo, Prompt …).
+- Zusätzlich zum Symbol in der Werkzeugleiste gibt es einen **Button „Vorlesen“ direkt in der Aktionsleiste unter dem Video** (neben „Ask“ bzw. „Teilen“).
+- Die **Sprache der Zusammenfassung ist einstellbar** (Standard: Deutsch). Die Erweiterung fordert Gemini ausdrücklich dazu auf und liest in derselben Sprache vor.
+- Alle Einstellungen liegen in den Optionen der Erweiterung (Sprache, API-Key, Stimme, Tempo, Prompt …).
 - Ist „Ask“ nicht sichtbar, weil YouTube die Funktion in deiner Region nicht anbietet (Geofencing), weist die Erweiterung auf ein **VPN in die USA** hin.
 
 > **Wichtig:** YouTube bietet für „Ask“ keine Programmierschnittstelle. Die Erweiterung bedient die Oberfläche wie du mit der Maus. Ändert YouTube das Layout, kann die Erkennung brechen. Deshalb sind Beschriftungen, Stichwörter und CSS-Selektoren in den Optionen einstellbar (Abschnitt [Fehlersuche](#fehlersuche)).
@@ -25,8 +27,8 @@ Chrome-Erweiterung für YouTube: Ein Klick auf das Symbol, und die in YouTube ei
 
 ## So funktioniert es
 
-1. **Klick auf das Symbol** auf einer Seite `youtube.com/watch?v=…`.
-2. Die Erweiterung öffnet unter dem Video „Ask“ (Gemini) und klickt auf den Vorschlag „Video zusammenfassen“. Alternativ sendet sie deinen eigenen Prompt. Dann wartet sie, bis die Antwort vollständig ist (der Text ändert sich drei Sekunden lang nicht mehr).
+1. **Klick auf das Symbol** der Erweiterung oder auf den **Button „Vorlesen“** unter dem Video, auf einer Seite `youtube.com/watch?v=…`.
+2. Die Erweiterung öffnet unter dem Video „Ask“ (Gemini) und sendet einen **Prompt in der gewählten Sprache** („Fasse dieses Video in wenigen Sätzen auf Deutsch zusammen …“). Klappt das Eintippen auf der Seite nicht, klickt sie stattdessen auf den Vorschlag „Video zusammenfassen“ von YouTube (dessen Antwortsprache bestimmt YouTube) und meldet das in der Statuskarte. Dann wartet sie, bis die Antwort vollständig ist (der Text ändert sich drei Sekunden lang nicht mehr).
 3. Der Antworttext wird für die Sprachausgabe bereinigt (Zeitstempel, Markdown, Links, Emojis und Hinweise wie „KI-generiert“ fliegen raus) und in Satzgruppen geteilt.
 4. Jede Gruppe wird per **Google Cloud Text-to-Speech** in Sprache umgewandelt. Die erste Gruppe startet sofort, die nächste lädt schon, während die erste läuft.
 5. Die Wiedergabe läuft in einem Offscreen-Dokument der Erweiterung. Das ist unabhängig von den Autoplay-Regeln der YouTube-Seite und funktioniert unter Ubuntu wie auf jedem anderen System.
@@ -52,7 +54,7 @@ git clone https://github.com/<dein-konto>/yt-gemini-vorleser.git ~/yt-gemini-vor
 Oder: das ZIP aus dem Actions-Artefakt (`yt-gemini-vorleser`) herunterladen und entpacken:
 
 ```bash
-unzip yt-gemini-vorleser-1.0.0.zip -d ~/yt-gemini-vorleser
+unzip yt-gemini-vorleser-1.1.0.zip -d ~/yt-gemini-vorleser
 ```
 
 Dann im Browser:
@@ -83,9 +85,11 @@ Kosten: Google gewährt je nach Stimmentyp ein monatliches Freikontingent, danac
 ## Benutzung
 
 1. Ein YouTube-Video öffnen (angemeldet, „Ask“ sichtbar).
-2. Auf das Symbol der Erweiterung klicken.
+2. Auf den Button **„Vorlesen“** unter dem Video klicken (oder auf das Symbol der Erweiterung).
 3. Zuhören. Die Zusammenfassung steht außerdem im Ask-Panel von YouTube.
-4. Erneut auf das Symbol klicken (oder in der Statuskarte auf „Stopp“), um abzubrechen. Das gilt auch, solange Gemini noch antwortet.
+4. Erneut klicken (Button zeigt dann „Stopp“; oder in der Statuskarte auf „Stopp“), um abzubrechen. Das gilt auch, solange Gemini noch antwortet.
+
+Der Button sitzt hinter „Ask“, bei fehlendem „Ask“ hinter „Teilen“, übernimmt die YouTube-Farben (hell/dunkel) und stellt sich selbst wieder her, wenn YouTube die Leiste neu aufbaut. Bei schmalen Fenstern zeigt er nur das Symbol. Abschaltbar unter *Optionen → Verhalten*; die Änderung gilt sofort, ohne Neuladen der Seite.
 
 Ist das Ask-Panel schon offen, klickt die Erweiterung nicht noch einmal auf „Ask“ (das würde es schließen), sondern verwendet es weiter. Läuft das Video noch, wird es beim Start des Vorlesens pausiert (abschaltbar).
 
@@ -95,18 +99,23 @@ Rechtsklick auf das Symbol → **Optionen** (oder `chrome://extensions` → Deta
 
 | Einstellung | Bedeutung | Standard |
 | --- | --- | --- |
+| **Zusammenfassung** | | |
+| Sprache | Sprache, in der Gemini antworten soll **und** in der vorgelesen wird (Deutsch, English, Français, Español, Italiano, Nederlands, Polski, Português, Русский, Türkçe, 日本語, 한국어, 中文). Beim Wechsel wird eine nicht passende Stimme zurückgesetzt | Deutsch (`de-DE`) |
+| Anfordern über | **Prompt** in der gewählten Sprache (empfohlen) oder der **Vorschlag „Video zusammenfassen“** von YouTube (Antwortsprache bestimmt YouTube). Klappt die gewählte Variante nicht, wird automatisch die andere versucht | Prompt |
+| Eigener Prompt | Ersetzt den Standard-Prompt. Platzhalter: `{sprache}` (z. B. „Deutsch“) und `{language}` (z. B. „German“), etwa „Fasse das Video auf {sprache} in höchstens sechs Sätzen zusammen, ohne Aufzählungen.“ | leer |
+| Maximale Länge | Längere Antworten werden am Satzende gekürzt | 6000 Zeichen |
+| **Google Text-to-Speech** | | |
 | API-Key | Schlüssel der Google Cloud Text-to-Speech API | leer |
-| Sprache | Sprachcode, in dem vorgelesen wird. Er sollte zur Antwortsprache von Gemini passen (bei eigenem Prompt: zur Sprache des Prompts) | `de-DE` |
-| Stimme | Name einer Google-Stimme. „Stimmen laden“ listet alle Stimmen der Sprache, beste Qualität zuerst. Leer = Standardstimme der Sprache | `de-DE-Neural2-B` |
+| Stimme | Name einer Google-Stimme. „Stimmen laden“ listet alle Stimmen der gewählten Sprache, beste Qualität zuerst. Leer = Standardstimme der Sprache. Eine Stimme einer anderen Sprache wird ignoriert | `de-DE-Neural2-B` |
 | Geschwindigkeit | 0,5× bis 2× | 1,0× |
 | Audioformat | Ogg Opus oder MP3 | Ogg Opus |
+| **Verhalten** | | |
 | Video pausieren | Video anhalten, sobald vorgelesen wird | an |
-| Eigener Prompt | Statt „Video zusammenfassen“ wird diese Frage an Gemini gesendet, z. B. „Fasse das Video auf Deutsch in höchstens sechs Sätzen zusammen, ohne Aufzählungen.“ | leer |
-| Maximale Länge | Längere Antworten werden am Satzende gekürzt | 6000 Zeichen |
-| *Erweitert* | | |
+| Button auf der Seite | „Vorlesen“-Button in der Aktionsleiste unter dem Video | an |
+| **Erweitert** | | |
 | Beschriftungen „Ask“ | Kommagetrennte Liste der Button-Beschriftungen (EN, DE und einige weitere vorbelegt) | siehe Optionen |
 | Stichwörter „Zusammenfassen“ | Teilstrings der Vorschlags-Schaltfläche | siehe Optionen |
-| CSS-Selektor „Ask“-Button | Hat Vorrang vor den Beschriftungen | leer |
+| CSS-Selektor „Ask“-Button | Hat Vorrang vor den Beschriftungen (gilt auch für die Position des Seiten-Buttons) | leer |
 | CSS-Selektor Gemini-Panel | Für den Fall, dass das Panel nicht erkannt wird | leer |
 | Zeitlimit | Wie lange auf Gemini gewartet wird (15 bis 300 s) | 90 s |
 | Diagnose | Schreibt immer eine Momentaufnahme der Seite in die Konsole | aus |
@@ -140,6 +149,8 @@ Die Erweiterung schreibt bei Erkennungsproblemen eine **Momentaufnahme** in die 
 | „Ask“ ist sichtbar, wird aber nicht gefunden (Hinweis „vermutlich Geofencing“) | Rechtsklick auf den Button → *Untersuchen*. Den Wert von `aria-label` (oder den Text) in den Optionen unter *Beschriftungen „Ask“* ergänzen. Oder einen CSS-Selektor des Buttons eintragen. Bei schmalem Fenster steckt „Ask“ im ⋯-Menü: Fenster verbreitern. |
 | „Gemini-Panel nicht gefunden“ | Panel untersuchen und einen Selektor eintragen, z. B. `ytd-engagement-panel-section-list-renderer[target-id*="ask"]`. In der Momentaufnahme stehen die vorhandenen Panels mit `target-id`. |
 | „Weder Zusammenfassen-Schaltfläche noch Eingabefeld gefunden“ | Das Stichwort der Schaltfläche (in deiner YouTube-Sprache) unter *Stichwörter* ergänzen oder einen eigenen Prompt hinterlegen. |
+| Die Zusammenfassung kommt in der falschen Sprache (z. B. Englisch) | Unter *Optionen → Zusammenfassung* die Sprache prüfen und **Anfordern über = Prompt** wählen. Der Vorschlag „Video zusammenfassen“ sendet YouTubes eigenen Prompt, dessen Sprache ich nicht beeinflussen kann. Steht in der Statuskarte „Eingabe nicht möglich – verwende den Vorschlag von YouTube“, ließ sich der Prompt auf der Seite nicht eintippen oder absenden: Dann hilft ein Blick in die Konsole-Momentaufnahme (Eingabefeld und Senden-Button des Panels) oder ein Issue. |
+| Der Button „Vorlesen“ erscheint nicht oder an falscher Stelle | Er hängt hinter „Ask“, sonst hinter „Teilen“. Prüfe unter *Optionen → Verhalten*, ob er aktiviert ist. Ist die Beschriftung von „Ask“ in deiner YouTube-Sprache nicht hinterlegt und gibt es kein „Teilen“ in der Liste, findet er keinen Platz: Beschriftung bzw. CSS-Selektor des Ask-Buttons in den erweiterten Optionen ergänzen. |
 | Beim ersten Benutzen blockiert ein Hinweis- oder Einwilligungsdialog von YouTube | Dialog einmal manuell bestätigen, dann erneut auf das Symbol klicken. |
 | „API-Key ist ungültig“, „API nicht aktiviert“, „Abrechnung fehlt“ | Siehe [API-Key einrichten](#google-api-key-einrichten). Die Meldungen von Google werden in der Statuskarte übersetzt angezeigt. |
 | Nichts passiert nach der Installation | Den YouTube-Tab einmal neu laden. (Beim ersten Klick lädt die Erweiterung ihre Skripte auch in schon offene Tabs nach.) |
@@ -151,7 +162,7 @@ Bei einem Issue bitte die Momentaufnahme anhängen (sie enthält die Video-URL u
 
 - **Datenfluss:** Der bereinigte Text der Zusammenfassung wird an `texttospeech.googleapis.com` gesendet, sonst an keinen Server. Die Erweiterung hat keine eigenen Server und kein Tracking.
 - **API-Key:** Er steht unverschlüsselt im lokalen Speicher deines Browserprofils und wird nur im Header `X-Goog-Api-Key` an die Google-TTS-API gesendet, nie in URLs oder Logs. Beschränke ihn in der Cloud Console auf die TTS-API und setze ein Budget.
-- **Ask-Unterhaltungen:** Jede Zusammenfassung ist eine normale „Ask“-Unterhaltung in deinem Google-Konto. Laut [YouTube-Hilfe](https://support.google.com/youtube/answer/14110396) werden mit dem Konto verbundene Unterhaltungen nach 45 Tagen gelöscht, und Menschen können Unterhaltungen prüfen.
+- **Ask-Unterhaltungen:** Jede Zusammenfassung ist eine normale „Ask“-Unterhaltung in deinem Google-Konto, der Prompt der Erweiterung erscheint dort als deine Frage. Laut [YouTube-Hilfe](https://support.google.com/youtube/answer/14110396) werden mit dem Konto verbundene Unterhaltungen nach 45 Tagen gelöscht, und Menschen können Unterhaltungen prüfen.
 - **Genauigkeit:** Gemini kann sich irren. Die Erweiterung liest wieder, was YouTube liefert.
 - **Fragil:** Keine offizielle Schnittstelle (siehe oben). Nur Desktop-Browser, nur `www.youtube.com/watch`.
 - **Nicht automatisch getestet:** gegen das echte YouTube (Anmeldung, Region, schrittweise Einführung der Funktion). Die Tests prüfen die Logik gegen eine nachgebaute Seite, siehe unten.
@@ -176,17 +187,18 @@ src/
   background.js          Service Worker: Klick auf Symbol, Offscreen-Dokument, Badge, Nachrichten
   content.js             Content-Script auf youtube.com: verbindet Ablauf, Anzeige und Nachrichten
   lib/
-    settings.js          Standardwerte, Validierung, chrome.storage
+    settings.js          Standardwerte, Validierung, Sprachen, Prompt-Aufbau, chrome.storage
     text.js              Bereinigen, Kürzen, Aufteilen (UTF-8-Bytes), Zeilen-Diff
-    youtube-dom.js       Ask-Button, Panel, Chips, Eingabefeld, Antworttext, Diagnose
+    youtube-dom.js       Ask-Button, Panel, Chips, Eingabefeld, Antworttext, Einfügestelle, Diagnose
     messages.js          Meldungstexte und Diagnose „warum fehlt Ask?“ (VPN-Hinweis)
     runner.js            Ablaufsteuerung nach dem Klick
     overlay.js           Statuskarte (Shadow DOM)
+    page-button.js       Button „Vorlesen“ in der Aktionsleiste unter dem Video
     google-tts.js        REST-Client für Cloud Text-to-Speech (synthesize, voices)
     speaker.js           Stücke erzeugen und nacheinander abspielen, stoppen
   offscreen/             Offscreen-Dokument (AUDIO_PLAYBACK) für die Wiedergabe
   options/               Optionsseite
-test/                    Tests mit node:test und jsdom (ca. 150 Tests)
+test/                    Tests mit node:test und jsdom (ca. 190 Tests)
 scripts/build.js         ZIP-Build ohne Abhängigkeiten
 scripts/generate-icons.py  Optional: Icons neu erzeugen (Pillow)
 .github/workflows/ci.yml GitHub Actions
@@ -200,8 +212,9 @@ Alle `src/lib/*.js` sind klassische Skripte im UMD-Stil: Sie laufen in der Erwei
 - **Google-TTS-Client:** Request-Aufbau, Key im Header, Fehlerübersetzung (Key ungültig, API aus, Abrechnung, Kontingent, Netzwerk), Stimmenliste. Ohne Netzwerk, mit Fake-`fetch`.
 - **Sprachausgabe:** Reihenfolge, Vorab-Laden, Stopp, Ersetzen laufender Wiedergabe, Fehlerfälle.
 - **YouTube-Seite (jsdom-Attrappe):** Ask-Button mit EN/DE-Beschriftung, Panel und Chips, Eingabefeld ohne Kommentar- und Suchfelder, Tippen und Absenden, Textsammlung, Anmeldestatus, Standorterkennung.
-- **Gesamtablauf:** Ask öffnen → zusammenfassen → vorlesen; Panel schon offen; wiederholter Lauf; eigener Prompt; **Geofencing mit VPN-Hinweis auf die USA**; Standort US ohne VPN-Rat; nicht angemeldet; fehlender Key; Zeitlimit; Kürzen; Abbruch.
+- **Gesamtablauf:** Ask öffnen → Prompt in der gewählten Sprache → vorlesen; Sprachwechsel; Rückfälle zwischen Prompt und YouTube-Vorschlag; Panel schon offen; wiederholter Lauf; eigener Prompt mit Platzhaltern; **Geofencing mit VPN-Hinweis auf die USA**; Standort US ohne VPN-Rat; nicht angemeldet; fehlender Key; Zeitlimit; Kürzen; Abbruch.
 - **Service Worker:** Klick-Routing, Nachinjektion, Offscreen-Dokument genau einmal, Statusweitergabe.
+- **Button auf der Seite:** Position hinter „Ask“/„Teilen“ (auch mit YouTubes Wrapper-Elementen), Selbstreparatur nach Neuaufbau der Leiste, SPA-Navigation, Zustandswechsel „Vorlesen“/„Stopp“, Aufräumen verwaister Instanzen.
 - **Optionsseite** und **Offscreen-Skript** (echte HTML-Dateien in jsdom: Laden, Speichern, Stimmen laden, Test, Wiedergabe), **Content-Script** mit der Lade-Reihenfolge aus dem Manifest, **Statuskarte**, **Manifest und Struktur** (Dateien vorhanden, minimale Berechtigungen, kein `eval`/`innerHTML`, Key wird nicht geloggt), **ZIP-Build**.
 
 Die Attrappe in `test/helpers/fake-youtube.js` ist ein Modell. Die echte Oberfläche von „Ask“ ist nicht dokumentiert und ändert sich.

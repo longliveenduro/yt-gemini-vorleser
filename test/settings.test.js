@@ -66,3 +66,58 @@ test('loadSettings/saveSettings arbeiten mit einem storage-Objekt', async () => 
   assert.equal(data.settings.speakingRate, 1.5);
   assert.equal((await S.loadSettings(storage)).apiKey, 'abc');
 });
+
+test('neue Einstellungen: Anforderungsmodus „prompt“ und Seiten-Button sind standardmäßig aktiv', () => {
+  const s = S.normalizeSettings({});
+  assert.equal(s.requestMode, 'prompt');
+  assert.equal(s.pageButton, true);
+  assert.equal(S.normalizeSettings({ requestMode: 'chip' }).requestMode, 'chip');
+  assert.equal(S.normalizeSettings({ requestMode: 'quatsch' }).requestMode, 'prompt');
+  assert.equal(S.normalizeSettings({ pageButton: false }).pageButton, false);
+  assert.equal(S.normalizeSettings({ pageButton: 'nein' }).pageButton, true);
+});
+
+test('Einstellungen aus Version 1.0 (ohne die neuen Felder) werden um Standardwerte ergänzt', () => {
+  const old = { apiKey: 'KEY', languageCode: 'de-DE', voiceName: 'de-DE-Neural2-B', speakingRate: 1.1 };
+  const s = S.normalizeSettings(old);
+  assert.equal(s.apiKey, 'KEY');
+  assert.equal(s.speakingRate, 1.1);
+  assert.equal(s.requestMode, 'prompt');
+  assert.equal(s.pageButton, true);
+});
+
+test('die Sprachliste ist konsistent und beginnt mit Deutsch', () => {
+  assert.equal(S.LANGUAGES[0].code, 'de-DE');
+  assert.equal(S.DEFAULT_SETTINGS.languageCode, S.LANGUAGES[0].code);
+  const codes = S.LANGUAGES.map((l) => l.code);
+  assert.equal(new Set(codes).size, codes.length);
+  for (const l of S.LANGUAGES) assert.ok(l.label && l.name && l.english, l.code);
+});
+
+test('languageInfo ordnet auch unbekannte Regionen über die Hauptsprache zu', () => {
+  assert.equal(S.languageInfo('de-DE').english, 'German');
+  assert.equal(S.languageInfo('de-AT').name, 'Deutsch');
+  assert.equal(S.languageInfo('EN-gb').english, 'English');
+  assert.deepEqual(S.languageInfo('sv-SE'), { code: 'sv-SE', label: 'sv-SE', name: 'sv-SE', english: 'sv-SE' });
+  assert.equal(S.primaryLanguage('cmn-CN'), 'cmn');
+});
+
+test('buildSummaryPrompt: Standard-Prompt verlangt ausdrücklich die gewählte Sprache', () => {
+  const de = S.buildSummaryPrompt(S.normalizeSettings({}));
+  assert.match(de, /^Fasse dieses Video/);
+  assert.match(de, /auf Deutsch/);
+  assert.match(de, /ohne Aufzählungen/);
+
+  const en = S.buildSummaryPrompt(S.normalizeSettings({ languageCode: 'en-US' }));
+  assert.match(en, /^Summarize this video/);
+  assert.match(en, /Respond in English/);
+
+  const fr = S.buildSummaryPrompt(S.normalizeSettings({ languageCode: 'fr-FR' }));
+  assert.match(fr, /Respond in French/);
+});
+
+test('buildSummaryPrompt: eigener Prompt hat Vorrang, Platzhalter werden ersetzt', () => {
+  const s = S.normalizeSettings({ languageCode: 'de-DE', customPrompt: 'Kurz auf {sprache} ({language}), bitte. {SPRACHE}' });
+  assert.equal(S.buildSummaryPrompt(s), 'Kurz auf Deutsch (German), bitte. Deutsch');
+  assert.equal(S.buildSummaryPrompt({ languageCode: 'en-GB', customPrompt: '  Exakt so.  ' }), 'Exakt so.');
+});

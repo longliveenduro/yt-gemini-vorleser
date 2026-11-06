@@ -37,11 +37,24 @@ function createWatchPage(options = {}) {
     streamMs: 10,
     openDelayMs: 5,
     panelTargetId: 'engagement-panel-ask',
+    ignoreTyped: false, // Eingaben im Prompt-Feld werden nicht abgeschickt (Absenden „funktioniert“ nicht)
+    wrapButtons: false, // jeden Aktions-Button in <button-view-model> hüllen, wie es YouTube tut
+    runScripts: undefined, // 'outside-only', wenn Skripte per window.eval geladen werden sollen
     url: 'https://www.youtube.com/watch?v=abc123',
     ...options,
   };
 
   const askButton = o.askLabel ? `<button id="ask" aria-label="${o.askLabel}"><span>${o.askLabel}</span></button>` : '';
+  const actions = [
+    '<button aria-label="Like this video along with 1,234 other people">1.2K</button>',
+    '<button aria-label="Dislike this video"></button>',
+    '<button aria-label="Share"><span>Share</span></button>',
+    askButton,
+    '<button aria-label="Download"><span>Download</span></button>',
+  ]
+    .filter(Boolean)
+    .map((b) => (o.wrapButtons ? `<button-view-model>${b}</button-view-model>` : b))
+    .join('\n            ');
   const chip = o.chipLabel ? `<button>${o.chipLabel}</button>` : '';
   const composer = o.withInput
     ? `<div class="composer"><textarea aria-label="Ask a question"></textarea>${
@@ -59,11 +72,7 @@ function createWatchPage(options = {}) {
         <video class="html5-main-video"></video>
         <ytd-watch-metadata>
           <div id="actions"><div id="top-level-buttons-computed">
-            <button aria-label="Like this video along with 1,234 other people">1.2K</button>
-            <button aria-label="Dislike this video"></button>
-            <button aria-label="Share"><span>Share</span></button>
-            ${askButton}
-            <button aria-label="Download"><span>Download</span></button>
+            ${actions}
           </div></div>
         </ytd-watch-metadata>
         <ytd-comments><ytd-commentbox><div id="contenteditable-root" contenteditable="true"></div></ytd-commentbox></ytd-comments>
@@ -84,7 +93,7 @@ function createWatchPage(options = {}) {
     <script>ytcfg.set({"INNERTUBE_CONTEXT":{"client":{"hl":"de","gl":"${o.country}"}}});</script>
   </body></html>`;
 
-  const dom = new JSDOM(html, { url: o.url, pretendToBeVisual: true });
+  const dom = new JSDOM(html, { url: o.url, pretendToBeVisual: true, runScripts: o.runScripts });
   const { window } = dom;
   const doc = window.document;
   const panel = doc.getElementById('ask-panel');
@@ -123,6 +132,7 @@ function createWatchPage(options = {}) {
   }
 
   function sendTyped() {
+    if (o.ignoreTyped) return;
     const textarea = panel.querySelector('textarea');
     if (textarea && textarea.value.trim()) {
       state.sent.push(textarea.value);
@@ -158,6 +168,8 @@ const FAST_TIMING = {
   askButtonTimeoutMs: 150,
   panelTimeoutMs: 300,
   chipTimeoutMs: 150,
+  sendButtonWaitMs: 30,
+  sendCheckMs: 120,
   stableMs: 80,
   minAnswerChars: 20,
 };

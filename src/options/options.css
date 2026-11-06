@@ -161,6 +161,14 @@ input[type="checkbox"] {
   font-size: 0.88rem;
 }
 
+code {
+  padding: 0.05rem 0.3rem;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: 0.9em "Ubuntu Mono", ui-monospace, "DejaVu Sans Mono", monospace;
+}
+
 button {
   padding: 0.5rem 0.9rem;
   color: var(--ink);

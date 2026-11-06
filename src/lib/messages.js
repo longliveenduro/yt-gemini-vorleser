@@ -60,10 +60,10 @@
     NO_PROMPT_TARGET: {
       tone: 'error',
       options: true,
-      title: 'Weder Zusammenfassen-Schaltfläche noch Eingabefeld gefunden',
+      title: 'Zusammenfassung konnte nicht angefordert werden',
       text:
-        'Ergänze in den Optionen die Stichwörter der „Video zusammenfassen“-Schaltfläche in deiner YouTube-Sprache ' +
-        'oder hinterlege einen eigenen Prompt (README, Abschnitt „Fehlersuche“).',
+        'Weder das Eingabefeld (der Prompt wurde nicht gesendet) noch der Vorschlag „Video zusammenfassen“ ließ sich bedienen. ' +
+        'Ergänze in den Optionen die Stichwörter des Vorschlags in deiner YouTube-Sprache (README, Abschnitt „Fehlersuche“).',
     },
     NO_ANSWER: {
       tone: 'error',

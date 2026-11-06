@@ -224,3 +224,52 @@ test('queryAllDeep findet Elemente in offenen Shadow-Roots', () => {
   assert.equal(found.length, 1);
   assert.equal(found[0].textContent, 'Tief');
 });
+
+test('findShareButton erkennt „Teilen“ in mehreren Sprachen', () => {
+  const { document } = createWatchPage();
+  assert.equal(dom.findShareButton(document).getAttribute('aria-label'), 'Share');
+  document.querySelector('[aria-label="Share"]').setAttribute('aria-label', 'Teilen');
+  assert.equal(dom.findShareButton(document).getAttribute('aria-label'), 'Teilen');
+  document.querySelector('[aria-label="Teilen"]').remove();
+  assert.equal(dom.findShareButton(document), null);
+});
+
+test('findButtonSlot: der Eintrag der Aktionsleiste hinter „Ask“ – mit und ohne Wrapper-Elemente', () => {
+  const plain = createWatchPage();
+  assert.equal(dom.findButtonSlot(plain.document, opts), plain.document.getElementById('ask'));
+
+  const wrapped = createWatchPage({ wrapButtons: true });
+  const slot = dom.findButtonSlot(wrapped.document, opts);
+  assert.equal(slot.tagName.toLowerCase(), 'button-view-model');
+  assert.equal(slot.parentElement.id, 'top-level-buttons-computed');
+});
+
+test('findButtonSlot: ohne „Ask“ wird „Teilen“ genommen, ohne beides null', () => {
+  const noAsk = createWatchPage({ askLabel: null });
+  assert.equal(dom.findButtonSlot(noAsk.document, opts), noAsk.document.querySelector('[aria-label="Share"]'));
+  noAsk.document.querySelector('[aria-label="Share"]').remove();
+  assert.equal(dom.findButtonSlot(noAsk.document, opts), null);
+});
+
+test('inputIsEmpty und clearPromptText arbeiten mit textarea und contenteditable', () => {
+  const page = createWatchPage({ panelOpen: true });
+  const textarea = dom.findPromptInput(page.panel);
+  assert.equal(dom.inputIsEmpty(textarea), true);
+  dom.setPromptText(textarea, 'Text');
+  assert.equal(dom.inputIsEmpty(textarea), false);
+  let fired = 0;
+  textarea.addEventListener('input', () => { fired += 1; });
+  dom.clearPromptText(textarea);
+  assert.equal(textarea.value, '');
+  assert.equal(dom.inputIsEmpty(textarea), true);
+  assert.equal(fired, 1);
+
+  const div = page.document.createElement('div');
+  div.setAttribute('contenteditable', 'true');
+  page.document.body.appendChild(div);
+  dom.setPromptText(div, 'Hallo');
+  assert.equal(dom.inputIsEmpty(div), false);
+  dom.clearPromptText(div);
+  assert.equal(dom.inputIsEmpty(div), true);
+  assert.equal(div.textContent, '');
+});
