@@ -1,0 +1,75 @@
+name: Release
+
+# Hängt das gebaute ZIP (und SHA256SUMS.txt) an ein GitHub-Release.
+#
+# Empfohlener Weg (funktioniert auch mit „immutable releases“):
+#   1. Version in manifest.json und package.json erhöhen, committen, pushen
+#   2. git tag vX.Y.Z && git push origin vX.Y.Z
+#   3. Dieser Workflow legt einen ENTWURF mit ZIP und Release-Notes an
+#   4. Auf GitHub den Entwurf prüfen und „Publish release“ klicken
+#
+# Zusätzlich: Wird ein Release direkt in der Oberfläche veröffentlicht, hängt der Workflow das ZIP nachträglich an
+# (nur möglich, wenn Releases nicht unveränderlich sind). Manuell: Actions → Release → Run workflow, z. B. um das ZIP
+# an ein bereits veröffentlichtes Release zu hängen („Use workflow from“ = Branch main, wenn der Tag älter als dieser
+# Workflow ist).
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag des Releases, z. B. v1.1.0 (muss zur Version in manifest.json passen)'
+        required: true
+        type: string
+      replace:
+        description: 'Dateien, die schon am Release hängen, ersetzen (bei veröffentlichten Releases sonst übersprungen)'
+        required: false
+        type: boolean
+        default: false
+
+# Release anlegen und Dateien anhängen braucht Schreibrechte auf „contents“, sonst nichts.
+permissions:
+  contents: write
+
+# Zwei Auslöser für denselben Tag (Tag-Push und „Release veröffentlicht“) laufen nacheinander, nicht gleichzeitig.
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  assets:
+    name: ZIP bauen und ans Release anhängen
+    # Veröffentlicht jemand einen Entwurf, an dem das ZIP schon hängt, ist nichts zu tun.
+    if: ${{ github.event_name != 'release' || !contains(join(github.event.release.assets.*.name, ','), 'yt-gemini-vorleser-') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-tags: true
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tests
+        run: npm test
+
+      - name: ZIP bauen
+        run: npm run build
+
+      - name: ZIP prüfen
+        run: unzip -tq dist/*.zip
+
+      - name: Release-Dateien anhängen
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_REPLACE: ${{ inputs.replace }}
+        run: node scripts/release.js

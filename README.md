@@ -51,10 +51,10 @@ Die Erweiterung wird als „entpackte Erweiterung“ geladen. Ein Store-Eintrag 
 git clone https://github.com/<dein-konto>/yt-gemini-vorleser.git ~/yt-gemini-vorleser
 ```
 
-Oder: das ZIP aus dem Actions-Artefakt (`yt-gemini-vorleser`) herunterladen und entpacken:
+Oder: das ZIP `yt-gemini-vorleser-<version>.zip` aus den **Assets des neuesten Releases** herunterladen (Prüfsumme: `sha256sum -c SHA256SUMS.txt` im Download-Ordner) und entpacken:
 
 ```bash
-unzip yt-gemini-vorleser-1.1.0.zip -d ~/yt-gemini-vorleser
+unzip yt-gemini-vorleser-1.1.0.zip -d ~/yt-gemini-vorleser   # Version anpassen
 ```
 
 Dann im Browser:
@@ -198,10 +198,12 @@ src/
     speaker.js           Stücke erzeugen und nacheinander abspielen, stoppen
   offscreen/             Offscreen-Dokument (AUDIO_PLAYBACK) für die Wiedergabe
   options/               Optionsseite
-test/                    Tests mit node:test und jsdom (ca. 190 Tests)
+test/                    Tests mit node:test und jsdom (ca. 220 Tests)
 scripts/build.js         ZIP-Build ohne Abhängigkeiten
+scripts/release.js       Hängt ZIP und Prüfsummen an ein GitHub-Release (nur node:-Module)
 scripts/generate-icons.py  Optional: Icons neu erzeugen (Pillow)
-.github/workflows/ci.yml GitHub Actions
+.github/workflows/ci.yml       Tests auf Ubuntu 24.04/26.04, ZIP als Workflow-Artefakt
+.github/workflows/release.yml  ZIP ans Release hängen
 ```
 
 Alle `src/lib/*.js` sind klassische Skripte im UMD-Stil: Sie laufen in der Erweiterung ohne Bundler (Content-Script-Liste im Manifest, `importScripts`, `<script>`) und in den Tests per `require()`.
@@ -215,13 +217,39 @@ Alle `src/lib/*.js` sind klassische Skripte im UMD-Stil: Sie laufen in der Erwei
 - **Gesamtablauf:** Ask öffnen → Prompt in der gewählten Sprache → vorlesen; Sprachwechsel; Rückfälle zwischen Prompt und YouTube-Vorschlag; Panel schon offen; wiederholter Lauf; eigener Prompt mit Platzhaltern; **Geofencing mit VPN-Hinweis auf die USA**; Standort US ohne VPN-Rat; nicht angemeldet; fehlender Key; Zeitlimit; Kürzen; Abbruch.
 - **Service Worker:** Klick-Routing, Nachinjektion, Offscreen-Dokument genau einmal, Statusweitergabe.
 - **Button auf der Seite:** Position hinter „Ask“/„Teilen“ (auch mit YouTubes Wrapper-Elementen), Selbstreparatur nach Neuaufbau der Leiste, SPA-Navigation, Zustandswechsel „Vorlesen“/„Stopp“, Aufräumen verwaister Instanzen.
+- **Release-Skript** gegen eine simulierte GitHub-API (neuer Entwurf, vorhandener Entwurf, nachträgliches Anhängen, Übersprungenes, unveränderliche Releases, parallele Läufe, seitenweises Lesen der Release-Liste, Fehlermeldungen ohne Token) und **statische Prüfungen des Release-Workflows** (Auslöser, minimale Rechte, nur offizielle Actions, Reihenfolge Tests → Build → Anhängen).
 - **Optionsseite** und **Offscreen-Skript** (echte HTML-Dateien in jsdom: Laden, Speichern, Stimmen laden, Test, Wiedergabe), **Content-Script** mit der Lade-Reihenfolge aus dem Manifest, **Statuskarte**, **Manifest und Struktur** (Dateien vorhanden, minimale Berechtigungen, kein `eval`/`innerHTML`, Key wird nicht geloggt), **ZIP-Build**.
 
 Die Attrappe in `test/helpers/fake-youtube.js` ist ein Modell. Die echte Oberfläche von „Ask“ ist nicht dokumentiert und ändert sich.
 
 ### Continuous Integration
 
-`.github/workflows/ci.yml` läuft bei Push auf `main` und bei Pull Requests auf **Ubuntu 24.04 und Ubuntu 26.04** mit **Node 22 und 24**, installiert mit `npm ci`, führt `npm test` aus und baut anschließend das ZIP, das als Artefakt bereitsteht. Die Runner-Labels sind fest gepinnt (`ubuntu-22.04` wird von GitHub abgekündigt, `ubuntu-latest` wechselt im Herbst 2026 von 24.04 auf 26.04).
+`.github/workflows/ci.yml` läuft bei Push auf `main` und bei Pull Requests auf **Ubuntu 24.04 und Ubuntu 26.04** mit **Node 22 und 24**, installiert mit `npm ci`, führt `npm test` aus und baut anschließend das ZIP. Das ZIP liegt danach als **Workflow-Artefakt** der jeweiligen Ausführung bereit. Das ist *nicht* dasselbe wie ein Release-Anhang, siehe nächster Abschnitt. Die Runner-Labels sind fest gepinnt (`ubuntu-22.04` wird von GitHub abgekündigt, `ubuntu-latest` wechselt im Herbst 2026 von 24.04 auf 26.04).
+
+### Release veröffentlichen
+
+GitHub hängt an jedes Release automatisch nur die Quellcode-Archive. Das gebaute ZIP kommt über `.github/workflows/release.yml` dazu. Der Workflow startet bei einem gepushten Versions-Tag (`vX.Y.Z`), beim Veröffentlichen eines Releases und manuell. Er führt `npm test` aus, baut das ZIP und hängt `yt-gemini-vorleser-<version>.zip` sowie `SHA256SUMS.txt` ans Release.
+
+**Empfohlener Weg**
+
+1. Version in `manifest.json` **und** `package.json` erhöhen (beide identisch), `npm test`, committen, pushen.
+2. Tag setzen und pushen:
+
+   ```bash
+   git tag v1.2.0
+   git push origin v1.2.0
+   ```
+
+3. Der Workflow legt einen **Entwurf** mit dem ZIP, der Prüfsummen-Datei und automatisch erzeugten Release-Notes an. Der Link steht in der Zusammenfassung des Workflow-Laufs.
+4. Auf GitHub unter *Releases* den Entwurf prüfen und **„Publish release“** klicken.
+
+Dieser Weg funktioniert auch, wenn für das Repository oder die Organisation **unveränderliche Releases** („immutable releases“) aktiviert sind: Dann lassen sich nach dem Veröffentlichen keine Dateien mehr anhängen, das ZIP muss also schon am Entwurf hängen.
+
+**Direkt in der Oberfläche veröffentlichen** („Draft a new release“ → neuen Tag wählen → „Publish release“) geht ebenfalls. Der Workflow hängt das ZIP dann nachträglich an. Das klappt nur, solange Releases nicht unveränderlich sind. Sonst bricht der Lauf mit einer Erklärung ab, und für dieses Release hilft nur eine neue Version, diesmal über den empfohlenen Weg.
+
+**Ein vorhandenes Release nachträglich ergänzen:** *Actions → Release → Run workflow*, den Tag eintragen (z. B. `v1.1.0`). Ist der Tag älter als dieser Workflow, bei „Use workflow from“ den Branch `main` wählen. Voraussetzung ist dann, dass die Version in `manifest.json` auf diesem Branch zum Tag passt. Weicht der Stand des Branches vom Tag ab, warnt das Protokoll. „Dateien ersetzen“ tauscht bereits angehängte Dateien eines veröffentlichten Releases aus.
+
+Hinweise: Der Tag muss zur Version in `manifest.json` passen, sonst bricht der Workflow ab, bevor etwas hochgeladen wird. Veröffentlichst du einen Entwurf, an dem das ZIP schon hängt, startet kein zweiter Lauf. Der Workflow braucht nur das Recht `contents: write` und nutzt ausschließlich offizielle `actions/*`-Actions.
 
 Repository anlegen:
 
