@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "YouTube Gemini Vorleser",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Fasst YouTube-Videos mit der Gemini-Funktion („Ask“) zusammen und liest die Zusammenfassung per Google Text-to-Speech vor.",
   "minimum_chrome_version": "116",
   "icons": {

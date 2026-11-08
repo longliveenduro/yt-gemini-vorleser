@@ -3,6 +3,11 @@
  * Packt die Erweiterung als ZIP (dist/yt-gemini-vorleser-<version>.zip) – nur die Dateien, die Chrome braucht.
  * Das ZIP kann entpackt und über chrome://extensions → „Entpackte Erweiterung laden“ installiert werden.
  * Der ZIP-Writer ist bewusst abhängigkeitsfrei (nur node:zlib) und erzeugt reproduzierbare Archive.
+ *
+ * Die Version kommt normalerweise aus manifest.json. Mit `--version 1.2.3` bzw. der Umgebungsvariable BUILD_VERSION
+ * wird stattdessen diese Version verwendet: Sie bestimmt den Dateinamen und wird in die manifest.json IM ZIP
+ * geschrieben (die Datei im Repository bleibt unverändert). Der Release-Workflow nutzt das, damit das ZIP immer zum
+ * Tag des Releases passt.
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -98,16 +103,47 @@ function createZip(entries) {
   return Buffer.concat([...locals, centralBuf, end]);
 }
 
-function main() {
-  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
-  const out = path.join(ROOT, 'dist', `yt-gemini-vorleser-${manifest.version}.zip`);
-  const files = collectFiles();
-  const zip = createZip(files.map((name) => ({ name, data: fs.readFileSync(path.join(ROOT, name)) })));
-  fs.mkdirSync(path.dirname(out), { recursive: true });
-  fs.writeFileSync(out, zip);
-  console.log(`Gebaut: ${path.relative(ROOT, out)} (${files.length} Dateien, ${zip.length} Bytes)`);
+/** Version für das ZIP: --version X.Y.Z vor BUILD_VERSION vor der Version aus manifest.json. */
+function resolveVersion(argv, env, manifestVersion) {
+  const i = argv.indexOf('--version');
+  if (i >= 0 && !argv[i + 1]) throw new Error('--version braucht einen Wert, z. B. --version 1.2.3.');
+  const version = (i >= 0 ? argv[i + 1] : '') || (env && env.BUILD_VERSION) || manifestVersion;
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`Ungültige Version „${version}“: erwartet wird z. B. 1.2.3.`);
+  return version;
 }
 
-module.exports = { collectFiles, createZip, crc32 };
+/** Setzt "version" in einer manifest.json (als Bytes); alles andere bleibt Byte für Byte erhalten. */
+function stampVersion(data, version) {
+  const text = data.toString('utf8');
+  const stamped = text.replace(/("version"\s*:\s*")[^"]*(")/, (_, open, close) => `${open}${version}${close}`);
+  if (JSON.parse(stamped).version !== version) throw new Error('Die Version in manifest.json konnte nicht gesetzt werden.');
+  return Buffer.from(stamped, 'utf8');
+}
 
-if (require.main === module) main();
+function main(argv = process.argv.slice(2), env = process.env) {
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, 'manifest.json'), 'utf8'));
+  const version = resolveVersion(argv, env, manifest.version);
+  const out = path.join(ROOT, 'dist', `yt-gemini-vorleser-${version}.zip`);
+  const files = collectFiles();
+  const zip = createZip(
+    files.map((name) => {
+      const data = fs.readFileSync(path.join(ROOT, name));
+      return { name, data: name === 'manifest.json' && version !== manifest.version ? stampVersion(data, version) : data };
+    }),
+  );
+  fs.mkdirSync(path.dirname(out), { recursive: true });
+  fs.writeFileSync(out, zip);
+  const note = version === manifest.version ? '' : `, Version ${version} statt ${manifest.version} aus manifest.json`;
+  console.log(`Gebaut: ${path.relative(ROOT, out)} (${files.length} Dateien, ${zip.length} Bytes${note})`);
+}
+
+module.exports = { collectFiles, createZip, crc32, resolveVersion, stampVersion, main };
+
+if (require.main === module) {
+  try {
+    main();
+  } catch (e) {
+    console.error(`::error::${e.message}`);
+    process.exit(1);
+  }
+}

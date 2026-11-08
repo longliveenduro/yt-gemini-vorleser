@@ -223,3 +223,71 @@ test('Sprachwechsel behält eine passende Stimme und setzt für Deutsch die Stan
   $('languageCode').dispatchEvent(new window.Event('change', { bubbles: true }));
   assert.equal($('voiceName').value, 'de-DE-Neural2-B');
 });
+
+test('Länge der Zusammenfassung: Standardwerte, Beispielzeile und Vorlese-Regeln sind sichtbar', async () => {
+  const { $ } = await loadOptions();
+  assert.equal($('summaryWords').value, '1000');
+  assert.equal($('summaryMinutes').value, '60');
+  assert.equal($('summaryMinWords').value, '100');
+  assert.equal($('summaryMaxWords').value, '2000');
+  assert.equal($('speechRules').checked, true);
+  assert.equal($('maxChars').value, '20000');
+  assert.equal(
+    $('lengthExample').textContent,
+    'Beispiele: 10 Minuten Video → 175 Wörter, 30 Minuten → 500 Wörter, 1 Stunde → 1.000 Wörter, 2 Stunden → 2.000 Wörter. ' +
+      'Vorgelesen dauern 150 Wörter etwa eine Minute.',
+  );
+});
+
+test('die Beispielzeile folgt den Eingaben, noch bevor gespeichert wird', async () => {
+  const { $, window } = await loadOptions();
+  $('summaryWords').value = '500';
+  $('summaryMinutes').value = '10';
+  $('summaryMaxWords').value = '3000';
+  $('summaryWords').dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.match($('lengthExample').textContent, /^Beispiele: 10 Minuten Video → 500 Wörter, 30 Minuten → 1\.500 Wörter, 1 Stunde → 3\.000 Wörter, 2 Stunden → 3\.000 Wörter\./);
+  $('summaryMinWords').value = '800';
+  $('summaryMinWords').dispatchEvent(new window.Event('input', { bubbles: true }));
+  assert.match($('lengthExample').textContent, /10 Minuten Video → 800 Wörter/);
+});
+
+test('Länge und Vorlese-Regeln werden geladen und gespeichert, Eingaben werden begrenzt', async () => {
+  const { $, store, window } = await loadOptions({
+    stored: { summaryWords: 750, summaryMinutes: 30, summaryMinWords: 150, summaryMaxWords: 1800, speechRules: false },
+  });
+  assert.equal($('summaryWords').value, '750');
+  assert.equal($('summaryMinutes').value, '30');
+  assert.equal($('summaryMinWords').value, '150');
+  assert.equal($('summaryMaxWords').value, '1800');
+  assert.equal($('speechRules').checked, false);
+
+  $('summaryWords').value = '99999';
+  $('summaryMinutes').value = '0';
+  $('summaryMinWords').value = '400';
+  $('summaryMaxWords').value = '200';
+  $('speechRules').checked = true;
+  $('form').dispatchEvent(new window.Event('submit', { cancelable: true, bubbles: true }));
+  await tick();
+  assert.equal(store.settings.summaryWords, 20000);
+  assert.equal(store.settings.summaryMinutes, 1);
+  assert.equal(store.settings.summaryMinWords, 400);
+  assert.equal(store.settings.summaryMaxWords, 400, 'Höchstwert wird auf den Mindestwert angehoben');
+  assert.equal(store.settings.speechRules, true);
+  assert.equal($('summaryMaxWords').value, '400', 'Formular zeigt den korrigierten Wert');
+  assert.equal(store.settings.settingsVersion, 2);
+});
+
+test('gespeichert mit dem alten Standard (6000 Zeichen, Version 1.1): Die Optionen zeigen den neuen Standard', async () => {
+  const { $ } = await loadOptions({ stored: { apiKey: 'KEY', maxChars: 6000 } });
+  assert.equal($('maxChars').value, '20000');
+});
+
+test('„Standardwerte laden“ stellt auch die Längeneinstellungen und die Vorlese-Regeln wieder her', async () => {
+  const { $ } = await loadOptions({ stored: { apiKey: 'KEY', summaryWords: 300, speechRules: false } });
+  assert.equal($('summaryWords').value, '300');
+  $('reset').click();
+  assert.equal($('summaryWords').value, '1000');
+  assert.match($('lengthExample').textContent, /1 Stunde → 1\.000 Wörter/);
+  assert.equal($('speechRules').checked, true);
+  assert.equal($('apiKey').value, 'KEY');
+});

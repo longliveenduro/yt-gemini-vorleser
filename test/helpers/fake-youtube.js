@@ -38,6 +38,7 @@ function createWatchPage(options = {}) {
     openDelayMs: 5,
     panelTargetId: 'engagement-panel-ask',
     ignoreTyped: false, // Eingaben im Prompt-Feld werden nicht abgeschickt (Absenden „funktioniert“ nicht)
+    durationSec: null, // Länge des Videos in Sekunden (video.duration); null → nicht geladen wie in jsdom üblich (NaN)
     wrapButtons: false, // jeden Aktions-Button in <button-view-model> hüllen, wie es YouTube tut
     runScripts: undefined, // 'outside-only', wenn Skripte per window.eval geladen werden sollen
     url: 'https://www.youtube.com/watch?v=abc123',
@@ -96,6 +97,7 @@ function createWatchPage(options = {}) {
   const dom = new JSDOM(html, { url: o.url, pretendToBeVisual: true, runScripts: o.runScripts });
   const { window } = dom;
   const doc = window.document;
+  if (o.durationSec != null) Object.defineProperty(doc.querySelector('video'), 'duration', { value: o.durationSec, configurable: true });
   const panel = doc.getElementById('ask-panel');
   const messages = panel.querySelector('.messages');
   const chips = panel.querySelector('.chips');

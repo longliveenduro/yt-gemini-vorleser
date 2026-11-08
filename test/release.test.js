@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
-const { main, attachAssets, createClient, loadAssets, validateTag, ReleaseError } = require('../scripts/release.js');
+const { main, attachAssets, createClient, loadAssets, versionFromTag, ReleaseError } = require('../scripts/release.js');
 const { createFakeGitHub } = require('./helpers/fake-github.js');
 
 const ROOT = path.resolve(__dirname, '..');
@@ -28,22 +28,22 @@ function setup(fakeOptions) {
   return { fake, logs, run };
 }
 
-/** Ein Mini-Projekt mit manifest.json und gebautem ZIP in dist/. */
-function makeProject(version = '1.2.0') {
+/** Ein Mini-Projekt mit manifest.json und gebautem ZIP in dist/ (das ZIP kann eine andere Version tragen). */
+function makeProject(version = '1.2.0', zipVersion = version) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ytgr-release-'));
   fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify({ version }));
   fs.mkdirSync(path.join(dir, 'dist'));
-  fs.writeFileSync(path.join(dir, 'dist', `yt-gemini-vorleser-${version}.zip`), ZIP_BYTES);
+  fs.writeFileSync(path.join(dir, 'dist', `yt-gemini-vorleser-${zipVersion}.zip`), ZIP_BYTES);
   return dir;
 }
 
-test('validateTag: v1.2.3 und 1.2.3 passen zur Version, alles andere nicht', () => {
-  assert.doesNotThrow(() => validateTag('v1.2.0', '1.2.0'));
-  assert.doesNotThrow(() => validateTag('1.2.0', '1.2.0'));
-  assert.throws(() => validateTag('v1.2', '1.2.0'), /Ungültiger Tag/);
-  assert.throws(() => validateTag('release-1', '1.2.0'), /Ungültiger Tag/);
-  assert.throws(() => validateTag('', '1.2.0'), /Ungültiger Tag/);
-  assert.throws(() => validateTag('v1.2.1', '1.2.0'), (e) => e instanceof ReleaseError && /passt nicht zur Version 1\.2\.0/.test(e.message) && /manifest\.json/.test(e.hint));
+test('versionFromTag: „v1.2.3“ und „1.2.3“ ergeben 1.2.3, alles andere ist ungültig', () => {
+  assert.equal(versionFromTag('v1.2.0'), '1.2.0');
+  assert.equal(versionFromTag('1.2.0'), '1.2.0');
+  assert.equal(versionFromTag('10.20.300'), '10.20.300');
+  for (const bad of ['v1.2', '1.2', 'release-1', '', undefined, null, '1.2.3-rc1', 'v1.2.3.4', 'V1.2.3', ' 1.2.3', '1.2.x']) {
+    assert.throws(() => versionFromTag(bad), (e) => e instanceof ReleaseError && /Ungültiger Tag/.test(e.message) && /1\.2\.3 oder v1\.2\.3/.test(e.message), String(bad));
+  }
 });
 
 test('loadAssets: ZIP und SHA256SUMS.txt im Format von sha256sum', () => {
@@ -57,10 +57,10 @@ test('loadAssets: ZIP und SHA256SUMS.txt im Format von sha256sum', () => {
   assert.match(assets[1].data.toString('utf8'), /^[0-9a-f]{64} {2}yt-gemini-vorleser-1\.2\.0\.zip\n$/);
 });
 
-test('loadAssets: fehlt das ZIP, kommt ein Hinweis auf „npm run build“', () => {
+test('loadAssets: fehlt das ZIP, kommt ein Hinweis auf „BUILD_VERSION=… npm run build“', () => {
   const dir = makeProject();
   fs.rmSync(path.join(dir, 'dist'), { recursive: true });
-  assert.throws(() => loadAssets(dir, '1.2.0'), (e) => e instanceof ReleaseError && /fehlt/.test(e.message) && /npm run build/.test(e.hint));
+  assert.throws(() => loadAssets(dir, '1.2.0'), (e) => e instanceof ReleaseError && /fehlt/.test(e.message) && /BUILD_VERSION=1\.2\.0 npm run build/.test(e.hint));
 });
 
 test('kein Release zum Tag → Entwurf mit Release-Notes anlegen und beide Dateien hochladen', async () => {
@@ -225,12 +225,50 @@ test('main: zeigt der Tag auf einen anderen Stand als gebaut wird, gibt es eine 
   assert.ok(logs.some((l) => l.startsWith('::warning::') && /entspricht nicht dem getaggten Stand/.test(l)));
 });
 
-test('main: Version und Tag passen nicht → Fehler, bevor irgendetwas hochgeladen wird', async () => {
+test('main: Tag 1.1.1, aber manifest.json sagt 1.1.0 (der Fall von Release 1.1.1) → ZIP aus dem Tag wird angehängt, nur eine Warnung', async () => {
+  const dir = makeProject('1.1.0', '1.1.1'); // gebaut mit BUILD_VERSION=1.1.1
+  const fake = createFakeGitHub({ releases: [{ id: 7, tag_name: '1.1.1', draft: false, html_url: 'https://x/7', assets: [] }] });
+  const logs = [];
+  const result = await main(
+    { RELEASE_TAG: '1.1.1', GITHUB_REPOSITORY: REPO, GITHUB_TOKEN: TOKEN },
+    { root: dir, fetchImpl: fake.fetchImpl, sha: 'a'.repeat(40), tagSha: 'a'.repeat(40), log: (l) => logs.push(l) },
+  );
+  assert.deepEqual(result.uploaded.sort(), ['SHA256SUMS.txt', 'yt-gemini-vorleser-1.1.1.zip']);
+  assert.deepEqual(fake.state.uploads.map((u) => u.name).sort(), ['SHA256SUMS.txt', 'yt-gemini-vorleser-1.1.1.zip']);
+  const warning = logs.find((l) => l.startsWith('::warning::') && /manifest\.json/.test(l));
+  assert.ok(warning, 'Warnung zur abweichenden Version');
+  assert.match(warning, /Tag 1\.1\.1 nennt Version 1\.1\.1, manifest\.json aber 1\.1\.0/);
+  assert.match(warning, /ZIP trägt die Version aus dem Tag \(1\.1\.1\)/);
+});
+
+test('main: stimmen Tag und manifest.json überein, gibt es keine Versions-Warnung (Tag mit und ohne „v“)', async () => {
+  for (const tag of ['v1.2.0', '1.2.0']) {
+    const dir = makeProject('1.2.0');
+    const logs = [];
+    await main(
+      { RELEASE_TAG: tag, GITHUB_REPOSITORY: REPO, GITHUB_TOKEN: TOKEN },
+      { root: dir, fetchImpl: createFakeGitHub().fetchImpl, sha: 'a'.repeat(40), tagSha: null, log: (l) => logs.push(l) },
+    );
+    assert.ok(!logs.some((l) => /manifest\.json/.test(l)), tag);
+  }
+});
+
+test('main: das ZIP trägt den Namen der Tag-Version; liegt nur das ZIP mit der Manifest-Version vor, bricht der Lauf ab, bevor etwas hochgeladen wird', async () => {
+  const dir = makeProject('1.1.0'); // nur yt-gemini-vorleser-1.1.0.zip, aber der Tag will 1.1.1
+  const fake = createFakeGitHub();
+  await assert.rejects(
+    main({ RELEASE_TAG: '1.1.1', GITHUB_REPOSITORY: REPO, GITHUB_TOKEN: TOKEN }, { root: dir, fetchImpl: fake.fetchImpl, sha: 'a'.repeat(40), tagSha: null, log() {} }),
+    (e) => e instanceof ReleaseError && /yt-gemini-vorleser-1\.1\.1\.zip fehlt/.test(e.message) && /BUILD_VERSION=1\.1\.1 npm run build/.test(e.hint),
+  );
+  assert.equal(fake.state.calls.length, 0);
+});
+
+test('main: ein ungültiger Tag bricht ab, bevor irgendetwas hochgeladen wird', async () => {
   const dir = makeProject('1.2.0');
   const fake = createFakeGitHub();
   await assert.rejects(
-    main({ RELEASE_TAG: 'v1.3.0', GITHUB_REPOSITORY: REPO, GITHUB_TOKEN: TOKEN }, { root: dir, fetchImpl: fake.fetchImpl, sha: 'a'.repeat(40), tagSha: null }),
-    /passt nicht zur Version/,
+    main({ RELEASE_TAG: 'release-2', GITHUB_REPOSITORY: REPO, GITHUB_TOKEN: TOKEN }, { root: dir, fetchImpl: fake.fetchImpl, sha: 'a'.repeat(40), tagSha: null }),
+    /Ungültiger Tag/,
   );
   assert.equal(fake.state.calls.length, 0);
 });
@@ -260,11 +298,34 @@ test('Kommandozeile: Fehler erscheinen als GitHub-Annotation „::error::“ mit
 
 const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'release.yml'), 'utf8');
 
-test('Workflow: startet bei Versions-Tags, bei veröffentlichten Releases und manuell', () => {
-  assert.match(workflow, /push:\s*\n\s*tags: \['v\[0-9\]\+\.\[0-9\]\+\.\[0-9\]\+'\]/);
+test('Workflow: startet bei Versions-Tags (mit und ohne „v“), bei veröffentlichten Releases und manuell', () => {
+  assert.match(workflow, /push:\s*\n\s*tags:\s*\n\s*- '\[0-9\]\+\.\[0-9\]\+\.\[0-9\]\+'\s*\n\s*- 'v\[0-9\]\+\.\[0-9\]\+\.\[0-9\]\+'/);
   assert.match(workflow, /release:\s*\n\s*types: \[published\]/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /tag:\s*\n\s*description:[^\n]*\n\s*required: true/);
+});
+
+/** Die Filtermuster von GitHub (nur die hier benutzten Zeichen: Zeichenklassen, „+“, „.“ als Punkt) als RegExp. */
+function tagFilterToRegExp(pattern) {
+  let out = '';
+  for (let i = 0; i < pattern.length; i += 1) {
+    const ch = pattern[i];
+    if (ch === '[') {
+      const end = pattern.indexOf(']', i);
+      out += pattern.slice(i, end + 1);
+      i = end;
+    } else if (ch === '+') out += '+';
+    else out += ch.replace(/[.*?^${}()|\\]/g, '\\$&');
+  }
+  return new RegExp(`^${out}$`);
+}
+
+test('Workflow: die Tag-Filter treffen 1.2.0 und v1.2.0, aber keine anderen Namen', () => {
+  const patterns = [...workflow.matchAll(/^\s+- '([^']+)'\s*$/gm)].map((m) => m[1]).filter((p) => /\[0-9\]/.test(p));
+  assert.equal(patterns.length, 2);
+  const matches = (tag) => patterns.some((p) => tagFilterToRegExp(p).test(tag));
+  for (const tag of ['1.1.1', 'v1.1.1', '1.2.0', 'v10.20.30']) assert.equal(matches(tag), true, tag);
+  for (const tag of ['1.1', 'v1.1', '1.1.1.1', 'release-1', '1.1.1-rc1', 'vv1.1.1', 'x1.1.1', 'v1.1.x']) assert.equal(matches(tag), false, tag);
 });
 
 test('Workflow: minimale Rechte (nur contents: write) und ausschließlich offizielle Actions', () => {
@@ -281,10 +342,19 @@ test('Workflow: erst Tests und Build, dann Anhängen; mit Zeitlimit, Token und T
   assert.ok(idx('npm ci') < idx('npm test'));
   assert.ok(idx('npm test') < idx('npm run build'));
   assert.ok(idx('npm run build') < idx('node scripts/release.js'));
+  // das ZIP bekommt die Version aus dem Tag (ein vorangestelltes „v“ fällt weg), nicht die aus manifest.json
+  assert.match(workflow, /name: ZIP bauen\s*\n\s*env:\s*\n\s*RELEASE_TAG: \$\{\{ inputs\.tag \|\| github\.ref_name \}\}/);
+  assert.match(workflow, /run: BUILD_VERSION="\$\{RELEASE_TAG#v\}" npm run build\n/);
   assert.match(workflow, /timeout-minutes: \d+/);
   assert.match(workflow, /GITHUB_TOKEN: \$\{\{ github\.token \}\}/);
   assert.match(workflow, /RELEASE_TAG: \$\{\{ inputs\.tag \|\| github\.ref_name \}\}/);
   assert.match(workflow, /RELEASE_REPLACE: \$\{\{ inputs\.replace \}\}/);
+});
+
+test('Workflow: Tag und Eingaben stehen nie direkt in einem Shell-Befehl (keine Skript-Einschleusung)', () => {
+  const runLines = workflow.split('\n').filter((l) => /^\s+(?:- )?run:/.test(l));
+  assert.ok(runLines.length >= 5);
+  for (const line of runLines) assert.doesNotMatch(line, /\$\{\{/, line);
 });
 
 test('Workflow: ein Entwurf, an dem das ZIP schon hängt, löst beim Veröffentlichen keinen zweiten Lauf aus', () => {
@@ -298,7 +368,7 @@ test('Workflow: Läufe zum selben Tag laufen nacheinander', () => {
 test('Workflow: der ZIP-Name im Workflow passt zu dem, den scripts/build.js erzeugt', () => {
   const build = fs.readFileSync(path.join(ROOT, 'scripts', 'build.js'), 'utf8');
   const release = fs.readFileSync(path.join(ROOT, 'scripts', 'release.js'), 'utf8');
-  assert.match(build, /yt-gemini-vorleser-\$\{manifest\.version\}\.zip/);
+  assert.match(build, /yt-gemini-vorleser-\$\{version\}\.zip/);
   assert.match(release, /yt-gemini-vorleser-\$\{version\}\.zip/);
   assert.match(workflow, /'yt-gemini-vorleser-'/);
 });

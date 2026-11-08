@@ -390,6 +390,38 @@
     return false;
   }
 
+  /** „1:02:03“, „12:34“ → Sekunden; null, wenn der Text keine Uhrzeitform hat (z. B. „LIVE“). */
+  function parseClock(text) {
+    const m = /^\s*(?:(\d{1,3}):)?(\d{1,2}):(\d{2})\s*$/.exec(String(text || ''));
+    if (!m) return null;
+    return Number(m[1] || 0) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  }
+
+  /** ISO-8601-Dauer wie „PT1H2M3S“ (steht in den Metadaten der Seite) → Sekunden; sonst null. */
+  function parseIsoDuration(text) {
+    const m = /^P(?:(\d+)D)?T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/.exec(String(text || '').trim());
+    if (!m) return null;
+    const sec = Number(m[1] || 0) * 86400 + Number(m[2] || 0) * 3600 + Number(m[3] || 0) * 60 + Math.round(Number(m[4] || 0));
+    return sec > 0 ? sec : null;
+  }
+
+  /**
+   * Länge des Videos in Sekunden – oder null (Livestream, Player noch nicht bereit). Läuft gerade Werbung, gehören
+   * Videoelement und Zeitanzeige zur Werbung; dann bleiben nur die Metadaten der Seite.
+   */
+  function getVideoDurationSec(doc) {
+    const adShowing = Boolean(doc.querySelector('.html5-video-player.ad-showing, #movie_player.ad-showing'));
+    if (!adShowing) {
+      const video = doc.querySelector('video.html5-main-video') || doc.querySelector('video');
+      if (video && Number.isFinite(video.duration) && video.duration > 0) return Math.round(video.duration);
+      const shown = doc.querySelector('.ytp-time-duration');
+      const fromClock = shown ? parseClock(shown.textContent) : null;
+      if (fromClock) return fromClock;
+    }
+    const meta = doc.querySelector('meta[itemprop="duration"]');
+    return meta ? parseIsoDuration(meta.getAttribute('content')) : null;
+  }
+
   /** Momentaufnahme für die Fehlersuche (Konsole bzw. GitHub-Issue). */
   function debugSnapshot(doc) {
     const labelOf = (el) => getLabels(el)[0];
@@ -433,6 +465,9 @@
     isSignedIn,
     detectCountry,
     pauseMainVideo,
+    parseClock,
+    parseIsoDuration,
+    getVideoDurationSec,
     debugSnapshot,
   };
 });

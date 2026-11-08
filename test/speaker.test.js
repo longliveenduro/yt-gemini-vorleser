@@ -13,11 +13,14 @@ const THREE_CHUNKS = Array.from({ length: 3 }, (_, i) => `Satz${i} ${'wort '.rep
 
 function setup({ autoEnd = true, playRejects = false, fetchFails = null } = {}) {
   const requests = [];
+  const bodies = [];
   const audios = [];
   const events = [];
   const fetchImpl = async (url, init) => {
     const n = requests.length;
-    requests.push(JSON.parse(init.body).input.text);
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    requests.push(body.input.text);
     if (fetchFails && fetchFails(n)) return { ok: false, status: 403, json: async () => ({ error: { message: 'This API method requires billing to be enabled.' } }) };
     return { ok: true, status: 200, json: async () => ({ audioContent: Buffer.from(`audio-${n}`).toString('base64') }) };
   };
@@ -39,7 +42,7 @@ function setup({ autoEnd = true, playRejects = false, fetchFails = null } = {}) 
     return audio;
   };
   const speaker = createSpeaker({ fetchImpl, createAudio, onStatus: (s) => events.push(s.phase) });
-  return { speaker, requests, audios, events };
+  return { speaker, requests, bodies, audios, events };
 }
 
 test('spielt alle Stücke der Reihe nach ab und meldet speaking → done', async () => {
@@ -146,4 +149,131 @@ test('leerer Text ergibt einen Fehlerstatus statt eines Requests', async () => {
   await speaker.speak('  \n ', settings);
   assert.equal(requests.length, 0);
   assert.deepEqual(events, ['error']);
+});
+
+const NEURAL = normalizeSettings({ apiKey: 'K', voiceName: 'de-DE-Neural2-B' });
+
+test('Abkürzungen und Sprachmarken gehen bei Neural2-Stimmen als SSML an die API', async () => {
+  const { speaker, bodies, events } = setup();
+  await speaker.speak('Die KI nutzt das {en|Harness}.', NEURAL);
+  assert.equal(bodies.length, 1);
+  assert.deepEqual(bodies[0].input, {
+    ssml: '<speak>Die <say-as interpret-as="characters">KI</say-as> nutzt das <lang xml:lang="en-US">Harness</lang>.</speak>',
+  });
+  assert.deepEqual(events, ['speaking', 'done']);
+});
+
+test('Text ohne Abkürzungen und Markierungen bleibt Klartext (kein SSML)', async () => {
+  const { speaker, bodies } = setup();
+  await speaker.speak('Ein ganz normaler Satz.', NEURAL);
+  assert.deepEqual(bodies[0].input, { text: 'Ein ganz normaler Satz.' });
+});
+
+test('eine Stimme ohne SSML (Chirp HD) bekommt Klartext: „K-I“ und kein Marker', async () => {
+  const { speaker, bodies } = setup();
+  await speaker.speak('Die KI nutzt das {en|Harness}.', normalizeSettings({ apiKey: 'K', voiceName: 'de-DE-Chirp-HD-D' }));
+  assert.deepEqual(bodies[0].input, { text: 'Die K-I nutzt das Harness.' });
+});
+
+test('eine Markierung mit Punkt wird nie zwischen zwei Anfragen zerschnitten', async () => {
+  const { speaker, bodies } = setup();
+  // Das erste Stück ist fast voll: „… {it|Dr.“ würde noch hineinpassen, der Rest der Markierung nicht mehr.
+  const first = `Satz ${'wort '.repeat(232)}ende.`;
+  const sentence = 'Dann spricht {it|Dr. Di Gianantonio} über KI.';
+  const bytes = (x) => Buffer.byteLength(x, 'utf8');
+  assert.ok(bytes(first) + 1 + bytes('Dann spricht {it|Dr.') <= 1200, 'Voraussetzung: der Anfang der Markierung passt noch');
+  assert.ok(bytes(first) + 1 + bytes(sentence) > 1200, 'Voraussetzung: der ganze Satz passt nicht mehr');
+  await speaker.speak(`${first} ${sentence}`, NEURAL);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].input.text, first);
+  assert.equal(
+    bodies[1].input.ssml,
+    `<speak>Dann spricht <lang xml:lang="it-IT">Dr. Di Gianantonio</lang> über <say-as interpret-as="characters">KI</say-as>.</speak>`,
+  );
+});
+
+test('eine Markierung in einem überlangen Satz bleibt beim Teilen an Wortgrenzen ganz', async () => {
+  const { speaker, bodies } = setup();
+  // ein einziger Satz; „{en|Pull“ passt noch ins erste Stück, die ganze Markierung nicht mehr
+  const filler = 'wort '.repeat(237).trim();
+  const text = `${filler} {en|Pull Request} ${'wort '.repeat(5)}ende.`;
+  const bytes = (x) => Buffer.byteLength(x, 'utf8');
+  assert.ok(bytes(`${filler} {en|Pull`) <= 1200, 'Voraussetzung: der Anfang der Markierung passt noch');
+  assert.ok(bytes(`${filler} {en|Pull Request}`) > 1200, 'Voraussetzung: die ganze Markierung passt nicht mehr');
+  await speaker.speak(text, NEURAL);
+  assert.equal(bodies.length, 2);
+  assert.equal(bodies[0].input.text, filler);
+  assert.match(bodies[1].input.ssml, /^<speak><lang xml:lang="en-US">Pull Request<\/lang> wort/);
+});
+
+test('lehnt Google das SSML ab (400), wird dasselbe Stück als Klartext wiederholt und der Rest der Wiedergabe bleibt Klartext', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, init) => {
+    const body = JSON.parse(init.body);
+    bodies.push(body);
+    if (body.input.ssml) return { ok: false, status: 400, json: async () => ({ error: { message: 'SSML is not supported by this voice.' } }) };
+    return { ok: true, status: 200, json: async () => ({ audioContent: Buffer.from('audio').toString('base64') }) };
+  };
+  const events = [];
+  const speaker = createSpeaker({
+    fetchImpl,
+    createAudio: (src) => ({ src, play() { setTimeout(() => this.onended && this.onended(), 1); return Promise.resolve(); }, pause() {} }),
+    onStatus: (s) => events.push(s.phase),
+  });
+  const long = `Die KI ${'wort '.repeat(135)}ende. KI KI ${'wort '.repeat(135)}Ende.`; // zwei Stücke, beide mit Abkürzung
+  await speaker.speak(long, NEURAL);
+  assert.deepEqual(events, ['speaking', 'done']);
+  const kinds = bodies.map((b) => (b.input.ssml ? 'ssml' : 'text'));
+  // 1. Stück: SSML abgelehnt, dann Klartext; 2. Stück gleich als Klartext (nicht noch einmal SSML versuchen)
+  assert.deepEqual(kinds, ['ssml', 'text', 'text']);
+  assert.match(bodies[1].input.text, /^Die K-I wort/);
+  assert.match(bodies[2].input.text, /^K-I K-I wort/);
+});
+
+test('andere 400-Fehler (ohne SSML in der Anfrage) werden nicht wiederholt', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return { ok: false, status: 400, json: async () => ({ error: { message: 'Voice does not exist' } }) };
+  };
+  const events = [];
+  const speaker = createSpeaker({ fetchImpl, createAudio: () => { throw new Error('darf nicht abspielen'); }, onStatus: (s) => events.push(s) });
+  await speaker.speak('Ein Satz ohne Besonderheiten.', NEURAL);
+  assert.equal(bodies.length, 1);
+  assert.equal(events.at(-1).phase, 'error');
+  assert.equal(events.at(-1).code, 'BAD_REQUEST');
+});
+
+test('scheitert auch der Klartext-Versuch nach einer SSML-Ablehnung, wird der Fehler gemeldet', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return { ok: false, status: 400, json: async () => ({ error: { message: 'Voice does not exist' } }) };
+  };
+  const events = [];
+  const speaker = createSpeaker({ fetchImpl, createAudio: () => { throw new Error('darf nicht abspielen'); }, onStatus: (s) => events.push(s) });
+  await speaker.speak('Die KI.', NEURAL);
+  assert.deepEqual(bodies.map((b) => Object.keys(b.input)[0]), ['ssml', 'text']);
+  assert.equal(events.at(-1).phase, 'error');
+  assert.equal(events.at(-1).code, 'BAD_REQUEST');
+});
+
+test('andere Fehler bei einer SSML-Anfrage (Abrechnung, Kontingent, Server) werden gemeldet, nicht als Klartext wiederholt', async () => {
+  for (const [status, message, code] of [
+    [403, 'This API method requires billing to be enabled.', 'BILLING'],
+    [429, 'Quota exceeded', 'QUOTA'],
+    [503, 'unavailable', 'SERVER'],
+  ]) {
+    const bodies = [];
+    const fetchImpl = async (url, init) => {
+      bodies.push(JSON.parse(init.body));
+      return { ok: false, status: status, json: async () => ({ error: { message } }) };
+    };
+    const events = [];
+    const speaker = createSpeaker({ fetchImpl, createAudio: () => { throw new Error('darf nicht abspielen'); }, onStatus: (s) => events.push(s) });
+    await speaker.speak('Die KI.', NEURAL);
+    assert.equal(bodies.length, 1, `${status}: nur eine Anfrage`);
+    assert.ok(bodies[0].input.ssml, `${status}: die Anfrage war SSML`);
+    assert.equal(events.at(-1).code, code);
+  }
 });

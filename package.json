@@ -1,6 +1,6 @@
 {
   "name": "yt-gemini-vorleser",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Chrome-Erweiterung: YouTube-Videos mit der Gemini-Funktion („Ask“) zusammenfassen und mit Google Text-to-Speech vorlesen.",
   "private": true,
   "license": "MIT",

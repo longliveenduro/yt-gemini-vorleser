@@ -25,6 +25,12 @@
     /^(copy|kopieren|share|teilen|good response|bad response|gute antwort|schlechte antwort)$/i,
   ];
 
+  // Sprachmarken wie {en|Pull Request} (siehe speech-markup.js) dürfen beim Teilen nicht zerschnitten werden, auch nicht
+  // an einem Punkt oder Leerzeichen in ihrem Inneren: Ein Wort ist eine Folge aus Zeichen und ganzen {…}-Gruppen, und
+  // nach einem Satzzeichen wird nur außerhalb einer {…}-Gruppe getrennt.
+  const WORDS = /(?:\{[^{}\n]*\}|\S)+/g;
+  const SENTENCE_BREAK = /(?<=[.!?…])\s+(?![^{}\n]*\})|\n+/;
+
   function utf8Length(s) {
     return new TextEncoder().encode(s).length;
   }
@@ -82,7 +88,7 @@
     if (utf8Length(sentence) <= maxBytes) return [sentence];
     const parts = [];
     let cur = '';
-    for (const word of sentence.split(/\s+/)) {
+    for (const word of sentence.match(WORDS) || []) {
       const candidate = cur ? `${cur} ${word}` : word;
       if (utf8Length(candidate) <= maxBytes) {
         cur = candidate;
@@ -113,7 +119,7 @@
    */
   function splitIntoChunks(text, maxBytes = 1200) {
     const sentences = String(text || '')
-      .split(/(?<=[.!?…])\s+|\n+/)
+      .split(SENTENCE_BREAK)
       .map((s) => s.trim())
       .filter(Boolean);
     const chunks = [];

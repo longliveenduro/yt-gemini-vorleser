@@ -1,15 +1,16 @@
 /*
  * Spielt Text per Google TTS ab: Der Text wird in Stücke geteilt, das erste Stück startet sofort,
- * während das nächste schon geladen wird. fetch und Audio werden übergeben (testbar ohne Browser).
+ * während das nächste schon geladen wird. Jedes Stück wird zuvor für die Stimme aufbereitet (Abkürzungen buchstabieren,
+ * Fremdwörter in ihrer Sprache sprechen, siehe speech-markup.js). fetch und Audio werden übergeben (testbar ohne Browser).
  */
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
-    module.exports = factory(require('./text.js'), require('./google-tts.js'));
+    module.exports = factory(require('./text.js'), require('./google-tts.js'), require('./speech-markup.js'));
   } else {
     const ns = (root.YTGR = root.YTGR || {});
-    ns.speaker = factory(ns.text, ns.googleTts);
+    ns.speaker = factory(ns.text, ns.googleTts, ns.speechMarkup);
   }
-})(typeof self !== 'undefined' ? self : globalThis, function (text, tts) {
+})(typeof self !== 'undefined' ? self : globalThis, function (text, tts, markup) {
   'use strict';
 
   const MIME = { OGG_OPUS: 'audio/ogg', MP3: 'audio/mpeg' };
@@ -67,7 +68,21 @@
       const id = ++session;
       const ctx = { abort: new AbortController(), audio: null, cancelPlay: null };
       current = ctx;
-      const synth = (chunk) => tts.synthesize({ text: chunk, settings, fetchImpl, signal: ctx.abort.signal });
+      const voice = tts.effectiveVoice(settings);
+      let plainOnly = false; // Google hat SSML abgelehnt: für den Rest dieser Wiedergabe nur noch Klartext
+
+      /** Ein Stück → Audio. Mit SSML, wenn die Stimme es versteht; lehnt Google es ab, einmal mit Klartext wiederholen. */
+      const synth = async (chunk) => {
+        const rendered = markup.render(chunk, { voiceName: voice.name || '', languageCode: voice.languageCode });
+        const send = (ssml) => tts.synthesize({ text: rendered.text, ssml, settings, fetchImpl, signal: ctx.abort.signal });
+        try {
+          return await send(plainOnly ? null : rendered.ssml);
+        } catch (e) {
+          if (!(e && e.ssml && e.code === 'BAD_REQUEST')) throw e;
+          plainOnly = true;
+          return send(null);
+        }
+      };
 
       try {
         let next = synth(chunks[0]);

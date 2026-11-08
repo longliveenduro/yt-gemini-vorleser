@@ -7,6 +7,8 @@ Chrome-Erweiterung für YouTube: Ein Klick auf das Symbol, und die in YouTube ei
 - Läuft unter **Ubuntu** (Google Chrome oder Chromium), ohne native Abhängigkeiten: Die Sprache kommt per HTTPS von Google, die Wiedergabe übernimmt der Browser.
 - Zusätzlich zum Symbol in der Werkzeugleiste gibt es einen **Button „Vorlesen“ direkt in der Aktionsleiste unter dem Video** (neben „Ask“ bzw. „Teilen“).
 - Die **Sprache der Zusammenfassung ist einstellbar** (Standard: Deutsch). Die Erweiterung fordert Gemini ausdrücklich dazu auf und liest in derselben Sprache vor.
+- Die **Länge der Zusammenfassung richtet sich nach dem Video**: Standard sind 1.000 Wörter je 60 Minuten Video (mindestens 100, höchstens 2.000 Wörter), einstellbar.
+- Der Prompt enthält **Vorlese-Regeln**: Abkürzungen werden buchstabiert („K-I“ statt „ki“), Fachbegriffe wie „Harness“ bleiben unübersetzt, und fremdsprachige Wörter und Namen werden in ihrer Sprache ausgesprochen (siehe [Aussprache](#aussprache-abkürzungen-fachbegriffe-und-fremdwörter)).
 - Alle Einstellungen liegen in den Optionen der Erweiterung (Sprache, API-Key, Stimme, Tempo, Prompt …).
 - Ist „Ask“ nicht sichtbar, weil YouTube die Funktion in deiner Region nicht anbietet (Geofencing), weist die Erweiterung auf ein **VPN in die USA** hin.
 
@@ -20,6 +22,7 @@ Chrome-Erweiterung für YouTube: Ein Klick auf das Symbol, und die in YouTube ei
 - [Google-API-Key einrichten](#google-api-key-einrichten)
 - [Benutzung](#benutzung)
 - [Einstellungen](#einstellungen)
+- [Aussprache: Abkürzungen, Fachbegriffe und Fremdwörter](#aussprache-abkürzungen-fachbegriffe-und-fremdwörter)
 - [„Ask“ nicht sichtbar: Geofencing und VPN](#ask-nicht-sichtbar-geofencing-und-vpn)
 - [Fehlersuche](#fehlersuche)
 - [Datenschutz, Kosten, Grenzen](#datenschutz-kosten-grenzen)
@@ -28,9 +31,9 @@ Chrome-Erweiterung für YouTube: Ein Klick auf das Symbol, und die in YouTube ei
 ## So funktioniert es
 
 1. **Klick auf das Symbol** der Erweiterung oder auf den **Button „Vorlesen“** unter dem Video, auf einer Seite `youtube.com/watch?v=…`.
-2. Die Erweiterung öffnet unter dem Video „Ask“ (Gemini) und sendet einen **Prompt in der gewählten Sprache** („Fasse dieses Video in wenigen Sätzen auf Deutsch zusammen …“). Klappt das Eintippen auf der Seite nicht, klickt sie stattdessen auf den Vorschlag „Video zusammenfassen“ von YouTube (dessen Antwortsprache bestimmt YouTube) und meldet das in der Statuskarte. Dann wartet sie, bis die Antwort vollständig ist (der Text ändert sich drei Sekunden lang nicht mehr).
+2. Die Erweiterung öffnet unter dem Video „Ask“ (Gemini) und sendet einen **Prompt in der gewählten Sprache** („Fasse dieses Video auf Deutsch zusammen, in etwa 500 Wörtern …“; die Wortzahl berechnet die Erweiterung aus der Länge des Videos). Klappt das Eintippen auf der Seite nicht, klickt sie stattdessen auf den Vorschlag „Video zusammenfassen“ von YouTube (dessen Antwortsprache bestimmt YouTube) und meldet das in der Statuskarte. Dann wartet sie, bis die Antwort vollständig ist (der Text ändert sich drei Sekunden lang nicht mehr).
 3. Der Antworttext wird für die Sprachausgabe bereinigt (Zeitstempel, Markdown, Links, Emojis und Hinweise wie „KI-generiert“ fliegen raus) und in Satzgruppen geteilt.
-4. Jede Gruppe wird per **Google Cloud Text-to-Speech** in Sprache umgewandelt. Die erste Gruppe startet sofort, die nächste lädt schon, während die erste läuft.
+4. Jede Gruppe wird per **Google Cloud Text-to-Speech** in Sprache umgewandelt. Zuvor werden Abkürzungen und fremdsprachige Wörter für die Stimme aufbereitet. Die erste Gruppe startet sofort, die nächste lädt schon, während die erste läuft.
 5. Die Wiedergabe läuft in einem Offscreen-Dokument der Erweiterung. Das ist unabhängig von den Autoplay-Regeln der YouTube-Seite und funktioniert unter Ubuntu wie auf jedem anderen System.
 
 Die Statuskarte unten links auf der Seite zeigt jeden Schritt, Fehler und den VPN-Hinweis.
@@ -80,7 +83,7 @@ Hinweise für Ubuntu:
 6. Unter *Abrechnung → Budgets und Benachrichtigungen* ein kleines Budget mit Warnung einrichten.
 7. Den Schlüssel in den Optionen eintragen und auf **„Stimme testen“** klicken.
 
-Kosten: Google gewährt je nach Stimmentyp ein monatliches Freikontingent, danach wird pro Zeichen abgerechnet (aktuelle Zahlen: [Preisseite](https://cloud.google.com/text-to-speech/pricing)). Eine Zusammenfassung hat typischerweise 1.500 bis 4.000 Zeichen.
+Kosten: Google gewährt je nach Stimmentyp ein monatliches Freikontingent, danach wird pro Zeichen abgerechnet (aktuelle Zahlen: [Preisseite](https://cloud.google.com/text-to-speech/pricing)). Die Länge hängt vom Video ab: Mit den Standardwerten sind es grob 1.300 Zeichen für ein 10-Minuten-Video, 3.700 für 30 Minuten und 7.500 für eine Stunde (1.000 Wörter sind etwa 7.500 Zeichen).
 
 ## Benutzung
 
@@ -102,8 +105,10 @@ Rechtsklick auf das Symbol → **Optionen** (oder `chrome://extensions` → Deta
 | **Zusammenfassung** | | |
 | Sprache | Sprache, in der Gemini antworten soll **und** in der vorgelesen wird (Deutsch, English, Français, Español, Italiano, Nederlands, Polski, Português, Русский, Türkçe, 日本語, 한국어, 中文). Beim Wechsel wird eine nicht passende Stimme zurückgesetzt | Deutsch (`de-DE`) |
 | Anfordern über | **Prompt** in der gewählten Sprache (empfohlen) oder der **Vorschlag „Video zusammenfassen“** von YouTube (Antwortsprache bestimmt YouTube). Klappt die gewählte Variante nicht, wird automatisch die andere versucht | Prompt |
-| Eigener Prompt | Ersetzt den Standard-Prompt. Platzhalter: `{sprache}` (z. B. „Deutsch“) und `{language}` (z. B. „German“), etwa „Fasse das Video auf {sprache} in höchstens sechs Sätzen zusammen, ohne Aufzählungen.“ | leer |
-| Maximale Länge | Längere Antworten werden am Satzende gekürzt | 6000 Zeichen |
+| Länge | Wie lang die Zusammenfassung sein soll, abhängig von der Videolänge: *x* Wörter je *y* Minuten Video, mindestens *m* und höchstens *n* Wörter. Die Erweiterung nennt Gemini die berechnete Wortzahl („in etwa 500 Wörtern“, gerundet auf 25); ist die Länge des Videos unbekannt (Livestream), sind es 300 Wörter. Die Optionen zeigen Beispiele | 1000 Wörter je 60 Minuten, mindestens 100, höchstens 2000 |
+| Vorlese-Regeln | Hängt Regeln an den Prompt: Abkürzungen buchstabieren, Fachbegriffe nicht übersetzen, fremdsprachige Wörter und Namen mit ihrer Sprache kennzeichnen (siehe [Aussprache](#aussprache-abkürzungen-fachbegriffe-und-fremdwörter)) | an |
+| Eigener Prompt | Ersetzt den Standard-Prompt vollständig, ohne versteckte Zusätze. Platzhalter: `{sprache}` (z. B. „Deutsch“), `{language}` (z. B. „German“), `{wörter}` (die aus der Videolänge berechnete Wortzahl) und `{regeln}` (die Vorlese-Regeln, leer bei ausgeschalteten Regeln), etwa „Fasse das Video auf {sprache} in {wörter} Wörtern zusammen, ohne Aufzählungen. {regeln}“ | leer |
+| Maximale Länge | Sicherheitsgrenze für den vorgelesenen Text: Längere Antworten werden am Satzende gekürzt | 20000 Zeichen |
 | **Google Text-to-Speech** | | |
 | API-Key | Schlüssel der Google Cloud Text-to-Speech API | leer |
 | Stimme | Name einer Google-Stimme. „Stimmen laden“ listet alle Stimmen der gewählten Sprache, beste Qualität zuerst. Leer = Standardstimme der Sprache. Eine Stimme einer anderen Sprache wird ignoriert | `de-DE-Neural2-B` |
@@ -121,6 +126,27 @@ Rechtsklick auf das Symbol → **Optionen** (oder `chrome://extensions` → Deta
 | Diagnose | Schreibt immer eine Momentaufnahme der Seite in die Konsole | aus |
 
 Die Einstellungen liegen in `chrome.storage.local` (also nur in diesem Browserprofil, nicht in der Google-Kontosynchronisierung).
+
+Zwei Hinweise für ein Update von Version 1.1.x: Wer das alte Zeichenlimit von **6000** nie geändert hat, bekommt automatisch das neue (20000), denn 6000 Zeichen würden längere Zusammenfassungen abschneiden. Und wer einen **eigenen Prompt** gespeichert hat, ergänzt `{wörter}` und `{regeln}` darin, sonst gelten weder die Längenvorgabe noch die Vorlese-Regeln.
+
+## Aussprache: Abkürzungen, Fachbegriffe und Fremdwörter
+
+Damit die Sprachausgabe nicht „ki“ sagt oder „Harness“ wie ein deutsches Wort liest, arbeiten Prompt und Erweiterung zusammen:
+
+1. **Abkürzungen:** Der Prompt bittet Gemini, buchstabierte Abkürzungen mit Bindestrichen zu schreiben (K-I, E-U, U-S-A, G-P-U) und als Wort gesprochene wie NASA normal zu lassen. Zusätzlich erkennt die Erweiterung Abkürzungen aus 2 bis 4 Großbuchstaben (KI, EU, GPU …) selbst, falls Gemini sie unverändert lässt. Ausgenommen sind eine kleine Wortliste (NASA, NATO, RAM, JSON …) und römische Zahlen. Gesprochen werden sie Buchstabe für Buchstabe.
+2. **Fachbegriffe:** Der Prompt verlangt, Begriffe aus Softwareentwicklung und künstlicher Intelligenz nicht zu übersetzen. „Harness“ bleibt „Harness“ und wird nicht zum „Programmgerüst“.
+3. **Fremdwörter und Namen:** Gemini kennzeichnet sie mit dem Sprachcode, etwa `{en|Harness}` oder `{it|Di Gianantonio}`. Die Erweiterung lässt die Stimme solche Wörter in ihrer Sprache lesen und entfernt die Klammern.
+
+Wie weit das geht, hängt vom Stimmentyp ab (so beschreibt es Google in der Dokumentation zu SSML):
+
+| Stimmentyp | Abkürzungen | Fremdwörter in ihrer Sprache |
+| --- | --- | --- |
+| Standard, WaveNet, Neural2, News | Buchstabe für Buchstabe (SSML `<say-as>`) | ja (SSML `<lang>`) |
+| Studio, Chirp 3 HD | Buchstabe für Buchstabe (SSML `<say-as>`) | nein, das Wort wird normal gelesen |
+| keine Stimme gewählt | Buchstabe für Buchstabe | nein |
+| Chirp HD (früher Journey) und andere | als „K-I“ geschrieben, die Stimme muss es buchstabieren | nein |
+
+Die Markierungen wie `{en|Harness}` sind auch im Ask-Panel von YouTube zu sehen. Lehnt Google eine Anfrage mit SSML ab, wiederholt die Erweiterung sie als einfachen Text. Japanisch, Chinesisch, Koreanisch und semitische Sprachen unterstützt `<lang>` laut Google nicht, solche Wörter werden normal gelesen. Sind die *Vorlese-Regeln* ausgeschaltet, fehlt nur der entsprechende Teil des Prompts. Die Erkennung von Großbuchstaben-Abkürzungen bleibt aktiv. Ob Gemini die Regeln zuverlässig befolgt und wie Googles Stimmen „K-I“ ohne SSML lesen, ist nicht automatisch getestet.
 
 ## „Ask“ nicht sichtbar: Geofencing und VPN
 
@@ -151,6 +177,10 @@ Die Erweiterung schreibt bei Erkennungsproblemen eine **Momentaufnahme** in die 
 | „Weder Zusammenfassen-Schaltfläche noch Eingabefeld gefunden“ | Das Stichwort der Schaltfläche (in deiner YouTube-Sprache) unter *Stichwörter* ergänzen oder einen eigenen Prompt hinterlegen. |
 | Die Zusammenfassung kommt in der falschen Sprache (z. B. Englisch) | Unter *Optionen → Zusammenfassung* die Sprache prüfen und **Anfordern über = Prompt** wählen. Der Vorschlag „Video zusammenfassen“ sendet YouTubes eigenen Prompt, dessen Sprache ich nicht beeinflussen kann. Steht in der Statuskarte „Eingabe nicht möglich – verwende den Vorschlag von YouTube“, ließ sich der Prompt auf der Seite nicht eintippen oder absenden: Dann hilft ein Blick in die Konsole-Momentaufnahme (Eingabefeld und Senden-Button des Panels) oder ein Issue. |
 | Der Button „Vorlesen“ erscheint nicht oder an falscher Stelle | Er hängt hinter „Ask“, sonst hinter „Teilen“. Prüfe unter *Optionen → Verhalten*, ob er aktiviert ist. Ist die Beschriftung von „Ask“ in deiner YouTube-Sprache nicht hinterlegt und gibt es kein „Teilen“ in der Liste, findet er keinen Platz: Beschriftung bzw. CSS-Selektor des Ask-Buttons in den erweiterten Optionen ergänzen. |
+| „KI“ wird trotzdem wie ein Wort gelesen, ein Fremdwort falsch ausgesprochen | Den Stimmentyp prüfen (Tabelle unter [Aussprache](#aussprache-abkürzungen-fachbegriffe-und-fremdwörter)): Fremdwörter in ihrer Sprache gibt es nur bei Standard-, WaveNet- und Neural2-Stimmen, und ohne SSML hängt das Buchstabieren an der Schreibweise „K-I“. Hat Gemini ein Wort nicht gekennzeichnet, liest die Stimme es deutsch. |
+| Im Ask-Panel stehen Wörter in geschweiften Klammern (`{en|Harness}`) | Das ist gewollt: So erfährt die Erweiterung die Sprache des Wortes. Beim Vorlesen fallen die Klammern weg. Wer sie nicht sehen will, schaltet unter *Optionen → Zusammenfassung* die *Vorlese-Regeln* aus. |
+| Die Zusammenfassung ist zu lang oder zu kurz | Unter *Optionen → Zusammenfassung → Länge* das Verhältnis anpassen (Wörter je Minuten Video). Gemini hält die Wortzahl nur ungefähr ein. |
+| Die Zusammenfassung bricht mitten im Text ab | Die Sicherheitsgrenze *Maximale Länge* (Zeichen) greift. Den Wert erhöhen oder die *höchste Wortzahl* senken. |
 | Beim ersten Benutzen blockiert ein Hinweis- oder Einwilligungsdialog von YouTube | Dialog einmal manuell bestätigen, dann erneut auf das Symbol klicken. |
 | „API-Key ist ungültig“, „API nicht aktiviert“, „Abrechnung fehlt“ | Siehe [API-Key einrichten](#google-api-key-einrichten). Die Meldungen von Google werden in der Statuskarte übersetzt angezeigt. |
 | Nichts passiert nach der Installation | Den YouTube-Tab einmal neu laden. (Beim ersten Klick lädt die Erweiterung ihre Skripte auch in schon offene Tabs nach.) |
@@ -189,6 +219,7 @@ src/
   lib/
     settings.js          Standardwerte, Validierung, Sprachen, Prompt-Aufbau, chrome.storage
     text.js              Bereinigen, Kürzen, Aufteilen (UTF-8-Bytes), Zeilen-Diff
+    speech-markup.js     Abkürzungen buchstabieren, Fremdwörter in ihrer Sprache (SSML bzw. Klartext)
     youtube-dom.js       Ask-Button, Panel, Chips, Eingabefeld, Antworttext, Einfügestelle, Diagnose
     messages.js          Meldungstexte und Diagnose „warum fehlt Ask?“ (VPN-Hinweis)
     runner.js            Ablaufsteuerung nach dem Klick
@@ -198,7 +229,7 @@ src/
     speaker.js           Stücke erzeugen und nacheinander abspielen, stoppen
   offscreen/             Offscreen-Dokument (AUDIO_PLAYBACK) für die Wiedergabe
   options/               Optionsseite
-test/                    Tests mit node:test und jsdom (ca. 220 Tests)
+test/                    Tests mit node:test und jsdom (ca. 300 Tests)
 scripts/build.js         ZIP-Build ohne Abhängigkeiten
 scripts/release.js       Hängt ZIP und Prüfsummen an ein GitHub-Release (nur node:-Module)
 scripts/generate-icons.py  Optional: Icons neu erzeugen (Pillow)
@@ -212,12 +243,14 @@ Alle `src/lib/*.js` sind klassische Skripte im UMD-Stil: Sie laufen in der Erwei
 
 - **Text:** Zeitstempel, Markdown, Links, Emojis, Hinweise; Aufteilen unter der 5000-Byte-Grenze der API; Zeilen-Diff.
 - **Google-TTS-Client:** Request-Aufbau, Key im Header, Fehlerübersetzung (Key ungültig, API aus, Abrechnung, Kontingent, Netzwerk), Stimmenliste. Ohne Netzwerk, mit Fake-`fetch`.
-- **Sprachausgabe:** Reihenfolge, Vorab-Laden, Stopp, Ersetzen laufender Wiedergabe, Fehlerfälle.
+- **Sprachausgabe:** Reihenfolge, Vorab-Laden, Stopp, Ersetzen laufender Wiedergabe, Fehlerfälle; SSML nur für Stimmen, die es verstehen, Rückfall auf Klartext bei abgelehntem SSML.
+- **Aussprache:** Abkürzungen (KI, EU, GPU, Ausnahmen, Bindestrich-Schreibweise, Grenzfälle wie iOS, mRNA, E-Mail), Sprachmarken, Stimmentypen, XML-Maskierung, Größenlimit, zerschnittene Markierungen.
+- **Länge nach Videolänge:** Berechnung der Wortzahl (Verhältnis, Rundung, Grenzen, unbekannte Länge), Videolänge aus Player, Zeitanzeige und Metadaten (Werbung, Livestream), Platzhalter im eigenen Prompt, Übernahme des alten Zeichenlimits.
 - **YouTube-Seite (jsdom-Attrappe):** Ask-Button mit EN/DE-Beschriftung, Panel und Chips, Eingabefeld ohne Kommentar- und Suchfelder, Tippen und Absenden, Textsammlung, Anmeldestatus, Standorterkennung.
 - **Gesamtablauf:** Ask öffnen → Prompt in der gewählten Sprache → vorlesen; Sprachwechsel; Rückfälle zwischen Prompt und YouTube-Vorschlag; Panel schon offen; wiederholter Lauf; eigener Prompt mit Platzhaltern; **Geofencing mit VPN-Hinweis auf die USA**; Standort US ohne VPN-Rat; nicht angemeldet; fehlender Key; Zeitlimit; Kürzen; Abbruch.
 - **Service Worker:** Klick-Routing, Nachinjektion, Offscreen-Dokument genau einmal, Statusweitergabe.
 - **Button auf der Seite:** Position hinter „Ask“/„Teilen“ (auch mit YouTubes Wrapper-Elementen), Selbstreparatur nach Neuaufbau der Leiste, SPA-Navigation, Zustandswechsel „Vorlesen“/„Stopp“, Aufräumen verwaister Instanzen.
-- **Release-Skript** gegen eine simulierte GitHub-API (neuer Entwurf, vorhandener Entwurf, nachträgliches Anhängen, Übersprungenes, unveränderliche Releases, parallele Läufe, seitenweises Lesen der Release-Liste, Fehlermeldungen ohne Token) und **statische Prüfungen des Release-Workflows** (Auslöser, minimale Rechte, nur offizielle Actions, Reihenfolge Tests → Build → Anhängen).
+- **Release-Skript** gegen eine simulierte GitHub-API (neuer Entwurf, vorhandener Entwurf, nachträgliches Anhängen, Übersprungenes, unveränderliche Releases, parallele Läufe, seitenweises Lesen der Release-Liste, Fehlermeldungen ohne Token) und **statische Prüfungen des Release-Workflows** (Auslöser, Tag-Filter mit und ohne „v“, minimale Rechte, nur offizielle Actions, Reihenfolge Tests → Build → Anhängen, keine Skript-Einschleusung über den Tag), dazu die Version aus dem Tag, die Abweichung von `manifest.json` (nur Warnung) und das Setzen der Version im ZIP.
 - **Optionsseite** und **Offscreen-Skript** (echte HTML-Dateien in jsdom: Laden, Speichern, Stimmen laden, Test, Wiedergabe), **Content-Script** mit der Lade-Reihenfolge aus dem Manifest, **Statuskarte**, **Manifest und Struktur** (Dateien vorhanden, minimale Berechtigungen, kein `eval`/`innerHTML`, Key wird nicht geloggt), **ZIP-Build**.
 
 Die Attrappe in `test/helpers/fake-youtube.js` ist ein Modell. Die echte Oberfläche von „Ask“ ist nicht dokumentiert und ändert sich.
@@ -228,28 +261,38 @@ Die Attrappe in `test/helpers/fake-youtube.js` ist ein Modell. Die echte Oberfl�
 
 ### Release veröffentlichen
 
-GitHub hängt an jedes Release automatisch nur die Quellcode-Archive. Das gebaute ZIP kommt über `.github/workflows/release.yml` dazu. Der Workflow startet bei einem gepushten Versions-Tag (`vX.Y.Z`), beim Veröffentlichen eines Releases und manuell. Er führt `npm test` aus, baut das ZIP und hängt `yt-gemini-vorleser-<version>.zip` sowie `SHA256SUMS.txt` ans Release.
+GitHub hängt an jedes Release automatisch nur die Quellcode-Archive. Das gebaute ZIP kommt über `.github/workflows/release.yml` dazu. Der Workflow startet bei einem gepushten Versions-Tag (`X.Y.Z` oder `vX.Y.Z`), beim Veröffentlichen eines Releases und manuell. Er führt `npm test` aus, baut das ZIP und hängt `yt-gemini-vorleser-<version>.zip` sowie `SHA256SUMS.txt` ans Release.
 
-**Empfohlener Weg**
+**Die Version des ZIPs kommt aus dem Tag** (ohne `v`), nicht aus `manifest.json`: Im ZIP wird die Version in `manifest.json` auf die des Tags gesetzt, die Datei im Repository bleibt unverändert. Weicht sie vom Tag ab, warnt der Lauf, scheitert aber nicht. Früher brach der Workflow in diesem Fall ab, deshalb blieb das Release 1.1.1 ohne ZIP: Sein Tag zeigt auf einen Stand, in dem `manifest.json` noch 1.1.0 nannte. Trotzdem sollte die Version vor dem Taggen in `manifest.json` und `package.json` stehen, damit auch der Quellcode des Releases stimmt.
+
+**Direkt in der Oberfläche veröffentlichen**
 
 1. Version in `manifest.json` **und** `package.json` erhöhen (beide identisch), `npm test`, committen, pushen.
+2. Auf GitHub: *Releases → Draft a new release*, einen neuen Tag eintragen (z. B. `1.2.0`, mit oder ohne `v`) und **„Publish release“** klicken.
+3. Der Workflow läuft (Reiter *Actions*, etwa eine halbe Minute) und hängt ZIP und Prüfsumme nachträglich an das Release.
+
+Das klappt nur, solange Releases nicht unveränderlich („immutable“) sind. Sonst bricht der Lauf mit einer Erklärung ab, und für dieses Release hilft nur eine neue Version, diesmal über den folgenden Weg.
+
+**Über einen Entwurf (funktioniert immer)**
+
+1. Version erhöhen, committen, pushen (wie oben).
 2. Tag setzen und pushen:
 
    ```bash
-   git tag v1.2.0
-   git push origin v1.2.0
+   git tag 1.2.0        # oder v1.2.0
+   git push origin 1.2.0
    ```
 
 3. Der Workflow legt einen **Entwurf** mit dem ZIP, der Prüfsummen-Datei und automatisch erzeugten Release-Notes an. Der Link steht in der Zusammenfassung des Workflow-Laufs.
 4. Auf GitHub unter *Releases* den Entwurf prüfen und **„Publish release“** klicken.
 
-Dieser Weg funktioniert auch, wenn für das Repository oder die Organisation **unveränderliche Releases** („immutable releases“) aktiviert sind: Dann lassen sich nach dem Veröffentlichen keine Dateien mehr anhängen, das ZIP muss also schon am Entwurf hängen.
+Dieser Weg funktioniert auch bei unveränderlichen Releases: Dann lassen sich nach dem Veröffentlichen keine Dateien mehr anhängen, das ZIP muss also schon am Entwurf hängen.
 
-**Direkt in der Oberfläche veröffentlichen** („Draft a new release“ → neuen Tag wählen → „Publish release“) geht ebenfalls. Der Workflow hängt das ZIP dann nachträglich an. Das klappt nur, solange Releases nicht unveränderlich sind. Sonst bricht der Lauf mit einer Erklärung ab, und für dieses Release hilft nur eine neue Version, diesmal über den empfohlenen Weg.
+Legst du in der Oberfläche ein Release mit neuem Tag an, kann der Workflow zweimal starten (für den neuen Tag und für die Veröffentlichung). Die beiden Läufe warten aufeinander, und der zweite sieht, dass das ZIP schon hängt, und tut nichts.
 
-**Ein vorhandenes Release nachträglich ergänzen:** *Actions → Release → Run workflow*, den Tag eintragen (z. B. `v1.1.0`). Ist der Tag älter als dieser Workflow, bei „Use workflow from“ den Branch `main` wählen. Voraussetzung ist dann, dass die Version in `manifest.json` auf diesem Branch zum Tag passt. Weicht der Stand des Branches vom Tag ab, warnt das Protokoll. „Dateien ersetzen“ tauscht bereits angehängte Dateien eines veröffentlichten Releases aus.
+**Ein vorhandenes Release nachträglich ergänzen:** *Actions → Release → Run workflow*, den Tag eintragen (z. B. `1.1.1`). Die Workflow-Datei kommt dabei vom Branch, den du bei „Use workflow from“ wählst (für ältere Tags `main`), und **gebaut wird der Stand dieses Branches, nicht der des Tags**. Das Protokoll warnt, wenn beide abweichen; die Version im ZIP ist immer die des Tags. Für alte Releases ist es deshalb meist besser, eine neue Version zu veröffentlichen. „Dateien ersetzen“ tauscht bereits angehängte Dateien eines veröffentlichten Releases aus.
 
-Hinweise: Der Tag muss zur Version in `manifest.json` passen, sonst bricht der Workflow ab, bevor etwas hochgeladen wird. Veröffentlichst du einen Entwurf, an dem das ZIP schon hängt, startet kein zweiter Lauf. Der Workflow braucht nur das Recht `contents: write` und nutzt ausschließlich offizielle `actions/*`-Actions.
+Hinweise: Der Tag muss die Form `X.Y.Z` oder `vX.Y.Z` haben, sonst bricht der Workflow ab, bevor etwas hochgeladen wird. Veröffentlichst du einen Entwurf, an dem das ZIP schon hängt, startet kein zweiter Lauf. Der Workflow braucht nur das Recht `contents: write` und nutzt ausschließlich offizielle `actions/*`-Actions.
 
 Repository anlegen:
 

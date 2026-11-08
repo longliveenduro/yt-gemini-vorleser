@@ -43,6 +43,14 @@
 
   const REQUEST_MODES = ['prompt', 'chip'];
 
+  // Version 2: längenabhängige Zusammenfassung; das Zeichenlimit steigt von 6000 auf 20000 (siehe migrate()).
+  const SETTINGS_VERSION = 2;
+  const LEGACY_MAX_CHARS = 6000;
+
+  // Ist die Videolänge unbekannt (Livestream, gerade läuft Werbung), bittet der Prompt um so viele Wörter.
+  const FALLBACK_WORDS = 300;
+  const WORD_STEP = 25; // die gewünschte Wortzahl wird auf Vielfache davon gerundet („etwa 175 Wörter“)
+
   const DEFAULT_SETTINGS = Object.freeze({
     apiKey: '',
     languageCode: 'de-DE',
@@ -53,13 +61,19 @@
     pauseVideo: true,
     pageButton: true,
     customPrompt: '',
-    maxChars: 6000,
+    speechRules: true,
+    summaryWords: 1000,
+    summaryMinutes: 60,
+    summaryMinWords: 100,
+    summaryMaxWords: 2000,
+    maxChars: 20000,
     askLabels: DEFAULT_ASK_LABELS.join(', '),
     summarizeKeywords: DEFAULT_SUMMARIZE_KEYWORDS.join(', '),
     askButtonSelector: '',
     panelSelector: '',
     responseTimeoutSec: 90,
     debug: false,
+    settingsVersion: SETTINGS_VERSION,
   });
 
   const AUDIO_ENCODINGS = ['OGG_OPUS', 'MP3'];
@@ -82,6 +96,7 @@
 
     const languageCode = str(r.languageCode, d.languageCode);
     const voiceName = str(r.voiceName, d.voiceName);
+    const summaryMinWords = num(r.summaryMinWords, d.summaryMinWords, 10, 20000, true);
 
     return {
       apiKey: str(r.apiKey, d.apiKey),
@@ -93,6 +108,11 @@
       pauseVideo: typeof r.pauseVideo === 'boolean' ? r.pauseVideo : d.pauseVideo,
       pageButton: typeof r.pageButton === 'boolean' ? r.pageButton : d.pageButton,
       customPrompt: str(r.customPrompt, d.customPrompt),
+      speechRules: typeof r.speechRules === 'boolean' ? r.speechRules : d.speechRules,
+      summaryWords: num(r.summaryWords, d.summaryWords, 10, 20000, true),
+      summaryMinutes: num(r.summaryMinutes, d.summaryMinutes, 1, 1440, true),
+      summaryMinWords,
+      summaryMaxWords: Math.max(summaryMinWords, num(r.summaryMaxWords, d.summaryMaxWords, 10, 20000, true)),
       maxChars: num(r.maxChars, d.maxChars, 500, 20000, true),
       askLabels: str(r.askLabels, '') || d.askLabels,
       summarizeKeywords: str(r.summarizeKeywords, '') || d.summarizeKeywords,
@@ -100,6 +120,7 @@
       panelSelector: str(r.panelSelector, d.panelSelector),
       responseTimeoutSec: num(r.responseTimeoutSec, d.responseTimeoutSec, 15, 300, true),
       debug: typeof r.debug === 'boolean' ? r.debug : d.debug,
+      settingsVersion: SETTINGS_VERSION,
     };
   }
 
@@ -119,17 +140,59 @@
   }
 
   /**
-   * Die Frage an Gemini. Ein eigener Prompt hat Vorrang; darin werden {sprache} (z. B. „Deutsch“) und
-   * {language} (z. B. „German“) ersetzt. Ohne eigenen Prompt wird die Zielsprache ausdrücklich verlangt.
+   * Gewünschte Länge der Zusammenfassung in Wörtern, abhängig von der Videolänge: summaryWords je summaryMinutes
+   * Minuten, auf 25 gerundet und auf [summaryMinWords, summaryMaxWords] begrenzt. Ohne bekannte Länge: 300 Wörter
+   * (ebenfalls begrenzt). Standard: 1000 Wörter je 60 Minuten, mindestens 100, höchstens 2000.
    */
-  function buildSummaryPrompt(settings) {
+  function targetWords(settings, durationSec) {
+    const s = normalizeSettings(settings);
+    const known = typeof durationSec === 'number' && Number.isFinite(durationSec) && durationSec > 0;
+    const raw = known ? (durationSec / 60) * (s.summaryWords / s.summaryMinutes) : FALLBACK_WORDS;
+    const stepped = Math.round(raw / WORD_STEP) * WORD_STEP;
+    return Math.min(s.summaryMaxWords, Math.max(s.summaryMinWords, stepped));
+  }
+
+  // Regeln, damit sich die Zusammenfassung gut vorlesen lässt. Sie werden in den Prompt eingebaut (und ersetzen im
+  // eigenen Prompt den Platzhalter {regeln}). Die Markierung {en|Wort} wertet speech-markup.js aus. Alles in einer
+  // Zeile: Der Prompt erscheint als Frage im Ask-Panel, und die Erkennung des Echos arbeitet zeilenweise.
+  const SPEECH_RULES_DE =
+    'Der Text wird vorgelesen. Schreibe buchstabierte Abkürzungen mit Bindestrichen (K-I, E-U, U-S-A, G-P-U), ' +
+    'als Wort gesprochene normal (NASA, NATO). Übersetze Fachbegriffe aus Softwareentwicklung und künstlicher ' +
+    'Intelligenz nicht, sondern verwende die englischen Originalbegriffe (Harness, Prompt, Pull Request, Agent, ' +
+    'Token; nie „Programmgerüst“ oder „Eingabeaufforderung“). Kennzeichne nicht eingedeutschte fremdsprachige Wörter ' +
+    'und Namen mit dem Sprachcode in geschweiften Klammern, z. B. {en|Harness}, {en|Pull Request}, {it|Di Gianantonio}.';
+
+  const SPEECH_RULES_EN =
+    'The text will be read aloud. Write abbreviations that are spelled out with hyphens between the letters ' +
+    '(A-I, E-U, U-S-A, G-P-U) and abbreviations pronounced as words normally (NASA, NATO). Do not translate technical ' +
+    'terms from software development and artificial intelligence; keep the original English terms (harness, prompt, ' +
+    'pull request, agent, token). Mark foreign-language words and names that are not in the answer language and not in ' +
+    'common use there by putting the language code in curly braces, e.g. {en|harness}, {it|Di Gianantonio}.';
+
+  /**
+   * Die Frage an Gemini. Ein eigener Prompt hat Vorrang; darin werden ersetzt: {sprache} (z. B. „Deutsch“),
+   * {language} (z. B. „German“), {wörter} bzw. {words} (die aus der Videolänge berechnete Wortzahl) und {regeln}
+   * bzw. {rules} (die Vorlese-Regeln, leer bei ausgeschalteten Regeln). Ohne eigenen Prompt wird die Zielsprache
+   * ausdrücklich verlangt und die Länge in Wörtern genannt. context.durationSec ist die Videolänge in Sekunden.
+   */
+  function buildSummaryPrompt(settings, context) {
     const info = languageInfo(settings.languageCode);
+    const german = primaryLanguage(settings.languageCode) === 'de';
+    const words = targetWords(settings, context && context.durationSec);
+    const rules = settings.speechRules === false ? '' : german ? SPEECH_RULES_DE : SPEECH_RULES_EN;
     const custom = String(settings.customPrompt || '').trim();
-    if (custom) return custom.replace(/\{sprache\}/gi, info.name).replace(/\{language\}/gi, info.english);
-    if (primaryLanguage(settings.languageCode) === 'de') {
-      return 'Fasse dieses Video in wenigen Sätzen auf Deutsch zusammen. Antworte als zusammenhängender Fließtext ohne Aufzählungen, Überschriften und Zeitangaben.';
+    if (custom) {
+      return custom
+        .replace(/\{sprache\}/gi, () => info.name)
+        .replace(/\{language\}/gi, () => info.english)
+        .replace(/\{(?:wörter|woerter|words)\}/gi, () => String(words))
+        .replace(/\{(?:regeln|rules)\}/gi, () => rules)
+        .trim();
     }
-    return `Summarize this video in a few sentences. Respond in ${info.english} as continuous prose, without bullet points, headings or timestamps.`;
+    const base = german
+      ? `Fasse dieses Video auf Deutsch zusammen, in etwa ${words} Wörtern. Antworte als zusammenhängender Fließtext ohne Aufzählungen, Überschriften und Zeitangaben.`
+      : `Summarize this video in about ${words} words. Respond in ${info.english} as continuous prose, without bullet points, headings or timestamps.`;
+    return rules ? `${base} ${rules}` : base;
   }
 
   /** "a, b\nc" → ['a', 'b', 'c'] */
@@ -140,9 +203,22 @@
       .filter(Boolean);
   }
 
+  /**
+   * Gespeicherte Einstellungen älterer Versionen anpassen. Bis Version 1.1 war 6000 Zeichen der Standard für die
+   * maximale Länge; das schneidet die längeren, von der Videolänge abhängigen Zusammenfassungen ab. Dieser alte
+   * Standardwert gilt deshalb als „nie geändert“ und wird durch den neuen ersetzt. Gespeichert wird die Version mit
+   * (normalizeSettings), eine später bewusst gewählte 6000 bleibt also erhalten.
+   */
+  function migrate(raw) {
+    if (!raw || typeof raw !== 'object' || Number(raw.settingsVersion) >= SETTINGS_VERSION) return raw;
+    const migrated = { ...raw };
+    if (Number(migrated.maxChars) === LEGACY_MAX_CHARS) delete migrated.maxChars;
+    return migrated;
+  }
+
   async function loadSettings(storageArea) {
     const { settings } = await storageArea.get('settings');
-    return normalizeSettings(settings);
+    return normalizeSettings(migrate(settings));
   }
 
   async function saveSettings(storageArea, settings) {
@@ -163,6 +239,9 @@
     languageInfo,
     buildSummaryPrompt,
     parseList,
+    targetWords,
+    migrate,
+    SETTINGS_VERSION,
     loadSettings,
     saveSettings,
   };

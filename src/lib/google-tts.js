@@ -33,15 +33,21 @@
   /**
    * Die gewählte Sprache bestimmt, was gesprochen wird. Eine Stimme wird nur verwendet, wenn sie zur selben
    * Hauptsprache gehört (en-GB-Stimme bei en-US ist in Ordnung, eine deutsche Stimme bei Englisch nicht).
+   * Ergebnis: { languageCode, name? } – genau das, was an die API geht.
    */
-  function buildSynthesizeRequest({ text, settings }) {
+  function effectiveVoice(settings) {
     const voiceLocale = localeOf(settings.voiceName, null);
     const useVoice = Boolean(settings.voiceName && voiceLocale && primary(voiceLocale) === primary(settings.languageCode));
     const voice = { languageCode: useVoice ? voiceLocale : settings.languageCode };
     if (useVoice) voice.name = settings.voiceName;
+    return voice;
+  }
+
+  /** Anfragekörper; mit ssml (und ohne text) wird SSML gesendet, sonst der Klartext. */
+  function buildSynthesizeRequest({ text, ssml, settings }) {
     return {
-      input: { text },
-      voice,
+      input: ssml ? { ssml } : { text },
+      voice: effectiveVoice(settings),
       audioConfig: { audioEncoding: settings.audioEncoding, speakingRate: settings.speakingRate },
     };
   }
@@ -94,14 +100,24 @@
     return body;
   }
 
-  /** Text → Audio. Gibt die Audiodaten Base64-kodiert zurück. */
-  async function synthesize({ text, settings, fetchImpl, signal }) {
-    const body = await request(fetchImpl, `${ENDPOINT}/text:synthesize`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': settings.apiKey },
-      body: JSON.stringify(buildSynthesizeRequest({ text, settings })),
-      signal,
-    });
+  /**
+   * Text (oder SSML) → Audio. Gibt die Audiodaten Base64-kodiert zurück.
+   * Lehnt Google eine Anfrage mit SSML ab, trägt der Fehler ssml = true: Der Aufrufer kann es dann mit Klartext versuchen.
+   */
+  async function synthesize({ text, ssml, settings, fetchImpl, signal }) {
+    const payload = buildSynthesizeRequest({ text, ssml, settings });
+    let body;
+    try {
+      body = await request(fetchImpl, `${ENDPOINT}/text:synthesize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': settings.apiKey },
+        body: JSON.stringify(payload),
+        signal,
+      });
+    } catch (e) {
+      if (e instanceof TtsError && payload.input.ssml) e.ssml = true;
+      throw e;
+    }
     const audio = body && typeof body.audioContent === 'string' ? body.audioContent : '';
     if (!audio) throw new TtsError('EMPTY_AUDIO', 'Google TTS lieferte keine Audiodaten.');
     return audio;
@@ -127,5 +143,5 @@
       .sort((a, b) => voiceRank(a.name) - voiceRank(b.name) || a.name.localeCompare(b.name));
   }
 
-  return { ENDPOINT, TtsError, localeOf, buildSynthesizeRequest, classifyError, synthesize, listVoices, voiceRank };
+  return { ENDPOINT, TtsError, localeOf, effectiveVoice, buildSynthesizeRequest, classifyError, synthesize, listVoices, voiceRank };
 });

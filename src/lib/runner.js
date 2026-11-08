@@ -2,8 +2,9 @@
  * Der Ablauf nach dem Klick auf das Erweiterungs-Symbol (läuft im Content-Script):
  *  1. prüfen: Video-Seite, API-Key vorhanden
  *  2. „Ask“-Button finden und klicken – fehlt er: Diagnose (Geofencing → VPN-Hinweis in die USA)
- *  3. Zusammenfassung anfordern: Prompt in der gewählten Sprache eintippen (Standard) oder den Vorschlag
- *     „Video zusammenfassen“ anklicken – bei Misserfolg wird jeweils die andere Variante versucht
+ *  3. Zusammenfassung anfordern: Prompt in der gewählten Sprache eintippen (Standard; die gewünschte Länge richtet
+ *     sich nach der Videolänge) oder den Vorschlag „Video zusammenfassen“ anklicken – bei Misserfolg wird jeweils
+ *     die andere Variante versucht
  *  4. Antwort abwarten (Text ändert sich eine Weile nicht mehr), bereinigen
  *  5. an den Hintergrunddienst zum Vorlesen übergeben
  * Alle Abhängigkeiten werden übergeben, damit der Ablauf mit jsdom getestet werden kann.
@@ -117,7 +118,7 @@
     async function tryType(located, settings) {
       const input = located.input || dom.findPromptInput(located.panel);
       if (!input) return null;
-      const prompt = settingsLib.buildSummaryPrompt(settings);
+      const prompt = settingsLib.buildSummaryPrompt(settings, { durationSec: dom.getVideoDurationSec(document) });
       const baseline = dom.collectText(located.panel);
       ui.status('Sende Frage an Gemini …');
       dom.setPromptText(input, prompt);

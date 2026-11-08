@@ -2,26 +2,34 @@ name: Release
 
 # Hängt das gebaute ZIP (und SHA256SUMS.txt) an ein GitHub-Release.
 #
-# Empfohlener Weg (funktioniert auch mit „immutable releases“):
-#   1. Version in manifest.json und package.json erhöhen, committen, pushen
-#   2. git tag vX.Y.Z && git push origin vX.Y.Z
-#   3. Dieser Workflow legt einen ENTWURF mit ZIP und Release-Notes an
-#   4. Auf GitHub den Entwurf prüfen und „Publish release“ klicken
+# Einfachster Weg: Auf GitHub unter „Releases“ → „Draft a new release“ einen neuen Tag eintragen (1.2.0 oder v1.2.0)
+# und „Publish release“ klicken. Dieser Workflow baut danach das ZIP und hängt es an das Release. Das geht nur,
+# solange Releases nicht unveränderlich („immutable“) sind.
 #
-# Zusätzlich: Wird ein Release direkt in der Oberfläche veröffentlicht, hängt der Workflow das ZIP nachträglich an
-# (nur möglich, wenn Releases nicht unveränderlich sind). Manuell: Actions → Release → Run workflow, z. B. um das ZIP
-# an ein bereits veröffentlichtes Release zu hängen („Use workflow from“ = Branch main, wenn der Tag älter als dieser
-# Workflow ist).
+# Weg, der auch mit „immutable releases“ funktioniert:
+#   1. git tag 1.2.0 && git push origin 1.2.0     (mit oder ohne „v“)
+#   2. Dieser Workflow legt einen ENTWURF mit ZIP und Release-Notes an
+#   3. Auf GitHub den Entwurf prüfen und „Publish release“ klicken
+#
+# Die Version des ZIPs kommt aus dem TAG, nicht aus manifest.json: Im ZIP wird die Version in manifest.json auf die
+# des Tags gesetzt. Wurde vor dem Taggen vergessen, die Version im Repository zu erhöhen, warnt der Lauf, scheitert
+# aber nicht (so blieb das Release 1.1.1 ohne ZIP).
+#
+# Manuell: Actions → Release → Run workflow, z. B. um das ZIP an ein bereits veröffentlichtes Release zu hängen
+# („Use workflow from“ = Branch main, wenn der Tag älter als dieser Workflow ist; gebaut wird dann der Stand des
+# Branches).
 
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - 'v[0-9]+.[0-9]+.[0-9]+'
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag des Releases, z. B. v1.1.0 (muss zur Version in manifest.json passen)'
+        description: 'Tag des Releases, z. B. 1.2.0 oder v1.2.0 (das ZIP trägt diese Version)'
         required: true
         type: string
       replace:
@@ -62,7 +70,11 @@ jobs:
         run: npm test
 
       - name: ZIP bauen
-        run: npm run build
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        # Die Version kommt aus dem Tag („v“ davor wird entfernt). Der Tag steht in einer Umgebungsvariablen,
+        # nie direkt im Shell-Text.
+        run: BUILD_VERSION="${RELEASE_TAG#v}" npm run build
 
       - name: ZIP prüfen
         run: unzip -tq dist/*.zip

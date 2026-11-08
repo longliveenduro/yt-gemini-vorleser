@@ -40,19 +40,62 @@
             </p>
           </div>
 
+          <div class="field" role="group" aria-labelledby="lengthLabel">
+            <span class="label" id="lengthLabel">Länge der Zusammenfassung</span>
+            <div class="row inline">
+              <input id="summaryWords" type="number" min="10" max="20000" step="50" aria-label="Wörter" />
+              <span>Wörter je</span>
+              <input id="summaryMinutes" type="number" min="1" max="1440" step="5" aria-label="Minuten Video" />
+              <span>Minuten Video</span>
+            </div>
+            <div class="row inline">
+              <span>mindestens</span>
+              <input id="summaryMinWords" type="number" min="10" max="20000" step="10" aria-label="Mindestens (Wörter)" />
+              <span>und höchstens</span>
+              <input id="summaryMaxWords" type="number" min="10" max="20000" step="50" aria-label="Höchstens (Wörter)" />
+              <span>Wörter</span>
+            </div>
+            <p class="hint" id="lengthExample"></p>
+            <p class="hint">
+              Die Länge richtet sich nach dem Video: Der Prompt nennt Gemini die berechnete Wortzahl. Ist die Videolänge
+              unbekannt (Livestream), werden 300 Wörter angefragt.
+            </p>
+          </div>
+
+          <div class="field check">
+            <input id="speechRules" type="checkbox" aria-describedby="speechRulesHint" />
+            <div>
+              <label for="speechRules">Vorlese-Regeln in den Prompt aufnehmen</label>
+              <p class="hint" id="speechRulesHint">
+                Gemini schreibt buchstabierte Abkürzungen mit Bindestrichen (K-I statt KI), übersetzt Fachbegriffe aus
+                der Softwareentwicklung nicht (Harness bleibt Harness) und kennzeichnet fremdsprachige Wörter und Namen
+                mit ihrer Sprache, z. B. <code>{en|Harness}</code> oder <code>{it|Di Gianantonio}</code>. Die
+                Erweiterung liest diese Wörter dann in der jeweiligen Sprache vor. Das klappt mit Stimmen vom Typ
+                Standard, WaveNet und Neural2; bei Studio und Chirp 3 HD werden nur Abkürzungen buchstabiert. Die
+                Markierungen sind auch im Ask-Panel zu sehen.
+              </p>
+            </div>
+          </div>
+
           <div class="field">
             <label for="customPrompt">Eigener Prompt (optional)</label>
             <textarea id="customPrompt" rows="3" spellcheck="false"></textarea>
             <p class="hint">
               Leer: Die Erweiterung verwendet einen Standard-Prompt in der gewählten Sprache. Ein eigener Prompt ersetzt
-              ihn. Platzhalter: <code>{sprache}</code> (z. B. „Deutsch“) und <code>{language}</code> (z. B. „German“),
-              etwa „Fasse das Video auf {sprache} in höchstens sechs Sätzen zusammen, ohne Aufzählungen.“
+              ihn vollständig. Platzhalter: <code>{sprache}</code> (z. B. „Deutsch“), <code>{language}</code> (z. B.
+              „German“), <code>{wörter}</code> (die aus der Videolänge berechnete Wortzahl) und <code>{regeln}</code>
+              (die Vorlese-Regeln von oben), etwa „Fasse das Video auf {sprache} in {wörter} Wörtern zusammen, ohne
+              Aufzählungen. {regeln}“.
             </p>
           </div>
 
           <div class="field">
             <label for="maxChars">Maximale Länge des vorgelesenen Textes (Zeichen)</label>
             <input id="maxChars" type="number" min="500" max="20000" step="100" />
+            <p class="hint">
+              Sicherheitsgrenze: Eine längere Antwort wird am Satzende gekürzt. Zur Orientierung: 1.000 Wörter sind etwa
+              7.500 Zeichen.
+            </p>
           </div>
         </section>
 

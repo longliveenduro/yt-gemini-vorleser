@@ -96,6 +96,12 @@ label {
   font-weight: 500;
 }
 
+.label {
+  display: block;
+  margin: 0 0 0.3rem;
+  font-weight: 500;
+}
+
 .check {
   display: flex;
   align-items: flex-start;
@@ -153,6 +159,20 @@ input[type="checkbox"] {
 
 .row input {
   flex: 1;
+}
+
+.row.inline {
+  flex-wrap: wrap;
+  margin-bottom: 0.5rem;
+}
+
+.row.inline input[type="number"] {
+  flex: none;
+  width: 6.5rem;
+}
+
+.check .hint {
+  margin-top: 0.15rem;
 }
 
 .hint {

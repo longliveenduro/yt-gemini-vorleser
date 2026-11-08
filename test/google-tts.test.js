@@ -108,3 +108,40 @@ test('listVoices sortiert nach Qualität und liefert Typ und Geschlecht', async 
   assert.equal(voices[0].type, 'Chirp3-HD');
   assert.equal(voices[1].gender, 'MALE');
 });
+
+test('effectiveVoice liefert Sprache und Stimme genau so, wie sie an die API gehen', () => {
+  assert.deepEqual(tts.effectiveVoice(settings), { languageCode: 'de-DE', name: 'de-DE-Neural2-B' });
+  assert.deepEqual(tts.effectiveVoice(normalizeSettings({ languageCode: 'en-US', voiceName: 'en-GB-Neural2-A' })), { languageCode: 'en-GB', name: 'en-GB-Neural2-A' });
+  // eine Stimme anderer Sprache wird ignoriert, ohne Stimme gibt es keinen Namen
+  assert.deepEqual(tts.effectiveVoice(normalizeSettings({ languageCode: 'en-US', voiceName: 'de-DE-Wavenet-F' })), { languageCode: 'en-US' });
+  assert.deepEqual(tts.effectiveVoice(normalizeSettings({ languageCode: 'fr-FR', voiceName: '' })), { languageCode: 'fr-FR' });
+});
+
+test('buildSynthesizeRequest sendet mit ssml SSML statt Text', () => {
+  const body = tts.buildSynthesizeRequest({ text: 'Die K-I', ssml: '<speak>Die <say-as interpret-as="characters">KI</say-as></speak>', settings });
+  assert.deepEqual(body.input, { ssml: '<speak>Die <say-as interpret-as="characters">KI</say-as></speak>' });
+  assert.equal('text' in body.input, false);
+  // ohne ssml (oder mit null) bleibt es beim Text
+  assert.deepEqual(tts.buildSynthesizeRequest({ text: 'Hallo', ssml: null, settings }).input, { text: 'Hallo' });
+  assert.deepEqual(tts.buildSynthesizeRequest({ text: 'Hallo', ssml: '', settings }).input, { text: 'Hallo' });
+});
+
+test('synthesize: lehnt Google eine SSML-Anfrage ab, trägt der Fehler ssml = true; bei Klartext nicht', async () => {
+  const bodies = [];
+  const fetchImpl = async (url, init) => {
+    bodies.push(JSON.parse(init.body));
+    return jsonResponse(400, { error: { message: 'SSML tag <lang> is not supported by this voice.' } });
+  };
+  await assert.rejects(tts.synthesize({ text: 'x', ssml: '<speak>x</speak>', settings, fetchImpl }), (e) => {
+    assert.equal(e.code, 'BAD_REQUEST');
+    assert.equal(e.ssml, true);
+    return true;
+  });
+  assert.deepEqual(bodies[0].input, { ssml: '<speak>x</speak>' });
+  await assert.rejects(tts.synthesize({ text: 'x', settings, fetchImpl }), (e) => {
+    assert.equal(e.code, 'BAD_REQUEST');
+    assert.equal(e.ssml, undefined);
+    return true;
+  });
+  assert.deepEqual(bodies[1].input, { text: 'x' });
+});

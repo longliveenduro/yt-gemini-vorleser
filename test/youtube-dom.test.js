@@ -273,3 +273,58 @@ test('inputIsEmpty und clearPromptText arbeiten mit textarea und contenteditable
   assert.equal(dom.inputIsEmpty(div), true);
   assert.equal(div.textContent, '');
 });
+
+test('parseClock liest Uhrzeitformen und lehnt alles andere ab', () => {
+  assert.equal(dom.parseClock('1:02:03'), 3723);
+  assert.equal(dom.parseClock(' 12:34 '), 754);
+  assert.equal(dom.parseClock('0:45'), 45);
+  assert.equal(dom.parseClock('10:00:00'), 36000);
+  for (const bad of ['LIVE', '', undefined, null, '5', '1:2:3', '10:5', '1:02:03:04', 'abc 1:02']) assert.equal(dom.parseClock(bad), null, String(bad));
+});
+
+test('parseIsoDuration liest ISO-8601-Dauern wie in den Metadaten der Seite', () => {
+  assert.equal(dom.parseIsoDuration('PT1H2M3S'), 3723);
+  assert.equal(dom.parseIsoDuration('PT21M34S'), 1294);
+  assert.equal(dom.parseIsoDuration('PT45S'), 45);
+  assert.equal(dom.parseIsoDuration('PT1H'), 3600);
+  assert.equal(dom.parseIsoDuration('PT12.6S'), 13);
+  assert.equal(dom.parseIsoDuration('P1DT2H'), 93600);
+  for (const bad of ['PT0S', 'P0D', 'PT', '', 'garbage', undefined, null]) assert.equal(dom.parseIsoDuration(bad), null, String(bad));
+});
+
+test('getVideoDurationSec: nimmt die Länge des Hauptvideos (gerundet)', () => {
+  const { document } = createWatchPage({ durationSec: 1234.6 });
+  assert.equal(dom.getVideoDurationSec(document), 1235);
+});
+
+test('getVideoDurationSec: ohne geladenes Video (NaN) hilft die Zeitanzeige des Players', () => {
+  const { document } = createWatchPage();
+  assert.equal(dom.getVideoDurationSec(document), null);
+  document.body.insertAdjacentHTML('beforeend', '<div class="ytp-time-display"><span class="ytp-time-current">0:05</span> / <span class="ytp-time-duration">1:02:03</span></div>');
+  assert.equal(dom.getVideoDurationSec(document), 3723);
+});
+
+test('getVideoDurationSec: Livestreams (unendliche Länge, „LIVE“) ergeben null', () => {
+  const { document } = createWatchPage({ durationSec: Infinity });
+  document.body.insertAdjacentHTML('beforeend', '<span class="ytp-time-duration">LIVE</span>');
+  assert.equal(dom.getVideoDurationSec(document), null);
+  const { document: empty } = createWatchPage({ durationSec: 0 });
+  assert.equal(dom.getVideoDurationSec(empty), null);
+});
+
+test('getVideoDurationSec: läuft Werbung, zählt nur die Länge aus den Metadaten der Seite', () => {
+  const { document } = createWatchPage({ durationSec: 15 }); // das Videoelement spielt gerade die Werbung
+  document.body.insertAdjacentHTML('beforeend', '<div id="movie_player" class="html5-video-player ad-showing"></div><span class="ytp-time-duration">0:15</span>');
+  assert.equal(dom.getVideoDurationSec(document), null, 'Werbung ohne Metadaten: unbekannt, nicht 15 Sekunden');
+  document.head.insertAdjacentHTML('beforeend', '<meta itemprop="duration" content="PT42M10S" />');
+  assert.equal(dom.getVideoDurationSec(document), 2530);
+  // nach der Werbung zählt wieder das Video selbst
+  document.getElementById('movie_player').classList.remove('ad-showing');
+  assert.equal(dom.getVideoDurationSec(document), 15);
+});
+
+test('getVideoDurationSec: Metadaten sind die letzte Rückfallebene', () => {
+  const { document } = createWatchPage();
+  document.head.insertAdjacentHTML('beforeend', '<meta itemprop="duration" content="PT5M" />');
+  assert.equal(dom.getVideoDurationSec(document), 300);
+});

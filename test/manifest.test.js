@@ -93,7 +93,7 @@ test('HTML-Seiten haben keine Inline-Skripte (MV3-CSP) und laden vorhandene Skri
     }
   }
   const order = (file) => [...read(file).matchAll(/<script[^>]*\ssrc="([^"]+)"/g)].map((m) => path.posix.basename(m[1]));
-  assert.deepEqual(order('src/offscreen/offscreen.html'), ['text.js', 'google-tts.js', 'speaker.js', 'offscreen.js']);
+  assert.deepEqual(order('src/offscreen/offscreen.html'), ['text.js', 'speech-markup.js', 'google-tts.js', 'speaker.js', 'offscreen.js']);
   assert.deepEqual(order('src/options/options.html'), ['settings.js', 'google-tts.js', 'options.js']);
 });
 

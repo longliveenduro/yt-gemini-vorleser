@@ -2,6 +2,7 @@
 /*
  * Hängt das gebaute ZIP (dist/yt-gemini-vorleser-<version>.zip) und eine Prüfsummen-Datei an ein GitHub-Release.
  * Wird vom Workflow .github/workflows/release.yml nach „npm test“ und „npm run build“ aufgerufen.
+ * Die Version stammt aus dem Tag (1.2.3 oder v1.2.3); weicht manifest.json ab, gibt es nur eine Warnung.
  *
  *  - Gibt es zum Tag noch kein Release, wird ein ENTWURF mit automatischen Release-Notes angelegt.
  *    Du prüfst ihn und klickst auf „Publish release“. Dieser Weg funktioniert auch mit „immutable releases“,
@@ -45,16 +46,14 @@ class ReleaseError extends Error {
   }
 }
 
-/** Tag wie „v1.2.3“ (oder „1.2.3“) muss zur Version in manifest.json passen, sonst stimmt der ZIP-Name nicht. */
-function validateTag(tag, version) {
+/**
+ * Die Version steht im Tag: „v1.2.3“ und „1.2.3“ sind gleichwertig. Sie bestimmt den Namen des ZIPs. Ob manifest.json
+ * dieselbe Version nennt, ist nur eine Warnung wert (siehe main), denn das ZIP trägt ohnehin die Version aus dem Tag.
+ */
+function versionFromTag(tag) {
   const m = /^v?(\d+\.\d+\.\d+)$/.exec(String(tag || ''));
-  if (!m) throw new ReleaseError(`Ungültiger Tag „${tag}“: erwartet wird z. B. v1.2.3.`);
-  if (m[1] !== version) {
-    throw new ReleaseError(
-      `Der Tag ${tag} passt nicht zur Version ${version} in manifest.json.`,
-      'Version in manifest.json und package.json erhöhen, committen und dann taggen. Der Tag muss mit der Version übereinstimmen.',
-    );
-  }
+  if (!m) throw new ReleaseError(`Ungültiger Tag „${tag}“: erwartet wird z. B. 1.2.3 oder v1.2.3.`);
+  return m[1];
 }
 
 function sha256(buffer) {
@@ -66,7 +65,10 @@ function loadAssets(root, version) {
   const zipName = `yt-gemini-vorleser-${version}.zip`;
   const zipPath = path.join(root, 'dist', zipName);
   if (!fs.existsSync(zipPath)) {
-    throw new ReleaseError(`${path.join('dist', zipName)} fehlt.`, 'Zuerst „npm run build“ ausführen.');
+    throw new ReleaseError(
+      `${path.join('dist', zipName)} fehlt.`,
+      `Zuerst das ZIP bauen: BUILD_VERSION=${version} npm run build (das ZIP muss die Version aus dem Tag tragen).`,
+    );
   }
   const zip = fs.readFileSync(zipPath);
   const sums = Buffer.from(`${sha256(zip)}  ${zipName}\n`, 'utf8');
@@ -196,8 +198,14 @@ async function main(env = process.env, deps = {}) {
   }
 
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'manifest.json'), 'utf8'));
-  validateTag(tag, manifest.version);
-  const assets = loadAssets(root, manifest.version);
+  const version = versionFromTag(tag);
+  if (manifest.version !== version) {
+    log(
+      `::warning::Der Tag ${tag} nennt Version ${version}, manifest.json aber ${manifest.version}. ` +
+        `Das ZIP trägt die Version aus dem Tag (${version}). Beim nächsten Mal die Version vor dem Taggen erhöhen.`,
+    );
+  }
+  const assets = loadAssets(root, version);
 
   const sha = deps.sha || headCommit(root);
   const tagSha = deps.tagSha !== undefined ? deps.tagSha : tagCommit(tag, root);
@@ -221,7 +229,7 @@ async function main(env = process.env, deps = {}) {
   return result;
 }
 
-module.exports = { main, attachAssets, createClient, findRelease, loadAssets, validateTag, ReleaseError, INTRO };
+module.exports = { main, attachAssets, createClient, findRelease, loadAssets, versionFromTag, ReleaseError, INTRO };
 
 if (require.main === module) {
   main().catch((e) => {

@@ -310,3 +310,45 @@ test('unerwartete Fehler (z. B. ungültiger Erweiterungskontext) werden verstän
   assert.equal(result.code, 'CONTEXT_INVALIDATED');
   assert.match(ui.errors[0].text, /Lade die Seite neu/);
 });
+
+test('die gewünschte Länge richtet sich nach der Länge des Videos: 30 Minuten → etwa 500 Wörter im Prompt', async () => {
+  const { page, runner } = setup({ page: { durationSec: 30 * 60 } });
+  await runner.run();
+  assert.equal(page.state.sent.length, 1);
+  assert.match(page.state.sent[0], /auf Deutsch zusammen, in etwa 500 Wörtern\./);
+  assert.equal(page.state.sent[0], buildSummaryPrompt(normalizeSettings({}), { durationSec: 30 * 60 }));
+});
+
+test('ein langes Video bekommt einen längeren Prompt-Wunsch als ein kurzes (3 Stunden gedeckelt, 5 Minuten mit Mindestlänge)', async () => {
+  const long = setup({ page: { durationSec: 3 * 3600 } });
+  await long.runner.run();
+  assert.match(long.page.state.sent[0], /in etwa 2000 Wörtern\./);
+  const short = setup({ page: { durationSec: 5 * 60 } });
+  await short.runner.run();
+  assert.match(short.page.state.sent[0], /in etwa 100 Wörtern\./);
+});
+
+test('eigene Längeneinstellung: 500 Wörter je 10 Minuten bei einem 20-Minuten-Video → 1000 Wörter', async () => {
+  const { page, runner } = setup({ page: { durationSec: 20 * 60 }, settings: { summaryWords: 500, summaryMinutes: 10, summaryMaxWords: 5000 } });
+  await runner.run();
+  assert.match(page.state.sent[0], /in etwa 1000 Wörtern\./);
+});
+
+test('ist die Länge des Videos unbekannt (Livestream), werden 300 Wörter angefragt', async () => {
+  const { page, runner } = setup({ page: { durationSec: Infinity } });
+  await runner.run();
+  assert.match(page.state.sent[0], /in etwa 300 Wörtern\./);
+});
+
+test('im eigenen Prompt liefert {wörter} die aus der Videolänge berechnete Zahl', async () => {
+  const { page, runner } = setup({ page: { durationSec: 60 * 60 }, settings: { customPrompt: 'Fasse in {wörter} Wörtern zusammen.' } });
+  await runner.run();
+  assert.deepEqual(page.state.sent, ['Fasse in 1000 Wörtern zusammen.']);
+});
+
+test('Vorlesetext mit Sprachmarken und Bindestrich-Abkürzungen kommt unverändert beim Vorlesen an', async () => {
+  const blocks = ['<p>Die K-I nutzt das {en|Harness}, sagt {it|Di Gianantonio}.</p>', '<p>Das {en|Pull Request} ist **fertig**.</p>'];
+  const { sent, runner } = setup({ page: { answerBlocks: blocks } });
+  await runner.run();
+  assert.equal(sent[0].text, 'Die K-I nutzt das {en|Harness}, sagt {it|Di Gianantonio}.\nDas {en|Pull Request} ist fertig.');
+});

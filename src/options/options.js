@@ -10,9 +10,11 @@
 
   const FIELDS = [
     'apiKey', 'languageCode', 'requestMode', 'voiceName', 'speakingRate', 'audioEncoding', 'pauseVideo', 'pageButton',
-    'customPrompt', 'maxChars', 'askLabels', 'summarizeKeywords', 'askButtonSelector', 'panelSelector',
-    'responseTimeoutSec', 'debug',
+    'customPrompt', 'speechRules', 'summaryWords', 'summaryMinutes', 'summaryMinWords', 'summaryMaxWords', 'maxChars',
+    'askLabels', 'summarizeKeywords', 'askButtonSelector', 'panelSelector', 'responseTimeoutSec', 'debug',
   ];
+  const LENGTH_FIELDS = ['summaryWords', 'summaryMinutes', 'summaryMinWords', 'summaryMaxWords'];
+  const EXAMPLE_MINUTES = [10, 30, 60, 120];
 
   const GENDER = { MALE: 'männlich', FEMALE: 'weiblich', NEUTRAL: 'neutral' };
 
@@ -59,6 +61,17 @@
     select.appendChild(option);
   }
 
+  /** Beispielzeile unter der Längeneinstellung: Wortzahl für 10, 30, 60 und 120 Minuten Video. */
+  function updateLengthExample() {
+    const settings = read();
+    const duration = (minutes) => (minutes % 60 === 0 ? `${minutes / 60} ${minutes === 60 ? 'Stunde' : 'Stunden'}` : `${minutes} Minuten`);
+    const parts = EXAMPLE_MINUTES.map((minutes, i) => {
+      const words = Settings.targetWords(settings, minutes * 60).toLocaleString('de-DE');
+      return `${duration(minutes)}${i === 0 ? ' Video' : ''} → ${words} Wörter`;
+    });
+    $('lengthExample').textContent = `Beispiele: ${parts.join(', ')}. Vorgelesen dauern 150 Wörter etwa eine Minute.`;
+  }
+
   function fill(settings) {
     ensureLanguageOption(settings.languageCode);
     for (const key of FIELDS) {
@@ -67,6 +80,7 @@
       else el.value = String(settings[key]);
     }
     updateRate();
+    updateLengthExample();
   }
 
   function read() {
@@ -169,6 +183,7 @@
 
   $('languageCode').addEventListener('change', onLanguageChange);
   $('speakingRate').addEventListener('input', updateRate);
+  for (const id of LENGTH_FIELDS) $(id).addEventListener('input', updateLengthExample);
   $('toggleKey').addEventListener('click', () => {
     const input = $('apiKey');
     const show = input.type === 'password';

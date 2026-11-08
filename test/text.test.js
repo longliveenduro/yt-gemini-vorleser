@@ -94,3 +94,38 @@ test('diffLines liefert nur neue Zeilen und beachtet Mehrfachvorkommen', () => {
   const current = ['Titel', 'Frage', 'Hinweis', 'Antwort', 'Hinweis', 'Hinweis'];
   assert.deepEqual(text.diffLines(baseline, current), ['Frage', 'Antwort', 'Hinweis']);
 });
+
+test('splitIntoChunks trennt nicht innerhalb von Sprachmarken – auch nicht an Punkt oder Leerzeichen darin', () => {
+  const input = 'Erster Satz. Dann spricht {it|Dr. Di Gianantonio} über das {en|Pull Request}. Ende.';
+  assert.deepEqual(text.splitIntoChunks(input, 45), [
+    'Erster Satz.',
+    'Dann spricht {it|Dr. Di Gianantonio} über',
+    'das {en|Pull Request}. Ende.',
+  ]);
+  // ohne Platzmangel bleibt alles in einem Stück
+  assert.deepEqual(text.splitIntoChunks(input, 1200), [input]);
+});
+
+test('splitIntoChunks: in überlangen Sätzen bleiben Markierungen ganze Wörter', () => {
+  const sentence = `${'wort '.repeat(20)}{en|Pull Request} `.repeat(3).trim() + '.';
+  const chunks = text.splitIntoChunks(sentence, 130);
+  assert.ok(chunks.length >= 3);
+  for (const chunk of chunks) {
+    assert.ok(text.utf8Length(chunk) <= 130);
+    assert.equal((chunk.match(/\{/g) || []).length, (chunk.match(/\}/g) || []).length, `Klammern ausgeglichen in „${chunk}“`);
+  }
+  assert.equal(chunks.join(' '), sentence);
+});
+
+test('splitIntoChunks: eine einzelne offene oder schließende Klammer verhindert das Teilen nicht', () => {
+  const input = 'Satz eins ist hier. Satz zwei } hat eine lose Klammer. Satz drei { ebenfalls.';
+  const chunks = text.splitIntoChunks(input, 30);
+  assert.ok(chunks.length >= 3);
+  assert.equal(chunks.join(' '), input);
+  assert.ok(chunks.every((c) => text.utf8Length(c) <= 30));
+});
+
+test('cleanSummaryText lässt Sprachmarken unverändert, auch mit Hervorhebung oder Backticks darum', () => {
+  const out = text.cleanSummaryText('Das **{en|Harness}** steuert den `{en|Agent}` mit {it|Di Gianantonio}.\nUnd {en|Pull Request}');
+  assert.equal(out, 'Das {en|Harness} steuert den {en|Agent} mit {it|Di Gianantonio}.\nUnd {en|Pull Request}.');
+});
