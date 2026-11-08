@@ -291,3 +291,56 @@ test('„Standardwerte laden“ stellt auch die Längeneinstellungen und die Vor
   assert.equal($('speechRules').checked, true);
   assert.equal($('apiKey').value, 'KEY');
 });
+
+test('Zahlenfelder: Standardwerte und jede ganze Zahl im Bereich sind gültig (kein step-Raster ab min)', async () => {
+  const { $, window } = await loadOptions();
+  const numbers = [...window.document.querySelectorAll('input[type="number"]')];
+  assert.ok(numbers.length >= 6);
+  for (const el of numbers) {
+    assert.equal(el.validity.valid, true, `${el.id}: Standardwert ${el.value} gilt im Browser als ungültig`);
+    const min = Number(el.min);
+    const max = Number(el.max);
+    // Die Einstellungen nehmen jede ganze Zahl in [min, max] an. Ein step > 1 würde nur ein Raster ab min erlauben
+    // (z. B. 10, 60, 110 … bei min=10 und step=50) und alles andere als ungültig melden.
+    for (const value of [min, min + 1, Math.floor((min + max) / 3), max - 1, max]) {
+      el.value = String(value);
+      assert.equal(el.validity.valid, true, `${el.id}: ${value} wird als ungültig gemeldet (${el.validationMessage})`);
+    }
+    el.value = String(max + 1);
+    assert.equal(el.validity.rangeOverflow, true, `${el.id}: max wird weiterhin geprüft`);
+    el.value = String(min - 1);
+    assert.equal(el.validity.rangeUnderflow, true, `${el.id}: min wird weiterhin geprüft`);
+  }
+  $('reset').click();
+  assert.equal($('form').checkValidity(), true, 'nach „Standardwerte laden“ ist das Formular gültig');
+});
+
+test('„Speichern“ per Klick speichert mit den Standardwerten (die Prüfung der Felder blockiert das Absenden nicht)', async () => {
+  const { $, store } = await loadOptions();
+  // Ein echter Klick löst die Constraint-Prüfung des Browsers aus; ein künstliches submit-Ereignis würde sie umgehen.
+  $('form').querySelector('button[type="submit"]').click();
+  await tick();
+  assert.ok(store.settings, 'es wurde nichts gespeichert');
+  assert.equal(store.settings.summaryWords, 1000);
+  assert.equal(store.settings.summaryMinutes, 60);
+  assert.equal(store.settings.summaryMaxWords, 2000);
+  assert.match($('saveStatus').textContent, /Gespeichert/);
+});
+
+test('ungewöhnliche, aber gültige Zahlen lassen sich speichern (z. B. 1.500 Wörter ≈ 11.250 Zeichen)', async () => {
+  const { $, store } = await loadOptions();
+  $('summaryWords').value = '175';
+  $('summaryMinutes').value = '12';
+  $('summaryMinWords').value = '125';
+  $('summaryMaxWords').value = '1500';
+  $('maxChars').value = '11250';
+  $('responseTimeoutSec').value = '62';
+  $('form').querySelector('button[type="submit"]').click();
+  await tick();
+  assert.equal(store.settings.summaryWords, 175);
+  assert.equal(store.settings.summaryMinutes, 12);
+  assert.equal(store.settings.summaryMinWords, 125);
+  assert.equal(store.settings.summaryMaxWords, 1500);
+  assert.equal(store.settings.maxChars, 11250);
+  assert.equal(store.settings.responseTimeoutSec, 62);
+});

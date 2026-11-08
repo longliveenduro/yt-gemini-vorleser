@@ -16,6 +16,9 @@
       </p>
 
       <form id="form" autocomplete="off">
+        <!-- Zahlenfelder bewusst ohne step: Der Browser zählt das Raster ab min und meldet jeden anderen Wert als
+             ungültig (1000 bei min=10 und step=50 – dann lässt sich nicht mehr speichern). Die Einstellungen
+             akzeptieren jede ganze Zahl im Bereich von min bis max. -->
         <section aria-labelledby="h-summary">
           <h2 id="h-summary">Zusammenfassung</h2>
 
@@ -43,16 +46,16 @@
           <div class="field" role="group" aria-labelledby="lengthLabel">
             <span class="label" id="lengthLabel">Länge der Zusammenfassung</span>
             <div class="row inline">
-              <input id="summaryWords" type="number" min="10" max="20000" step="50" aria-label="Wörter" />
+              <input id="summaryWords" type="number" min="10" max="20000" aria-label="Wörter" />
               <span>Wörter je</span>
-              <input id="summaryMinutes" type="number" min="1" max="1440" step="5" aria-label="Minuten Video" />
+              <input id="summaryMinutes" type="number" min="1" max="1440" aria-label="Minuten Video" />
               <span>Minuten Video</span>
             </div>
             <div class="row inline">
               <span>mindestens</span>
-              <input id="summaryMinWords" type="number" min="10" max="20000" step="10" aria-label="Mindestens (Wörter)" />
+              <input id="summaryMinWords" type="number" min="10" max="20000" aria-label="Mindestens (Wörter)" />
               <span>und höchstens</span>
-              <input id="summaryMaxWords" type="number" min="10" max="20000" step="50" aria-label="Höchstens (Wörter)" />
+              <input id="summaryMaxWords" type="number" min="10" max="20000" aria-label="Höchstens (Wörter)" />
               <span>Wörter</span>
             </div>
             <p class="hint" id="lengthExample"></p>
@@ -91,7 +94,7 @@
 
           <div class="field">
             <label for="maxChars">Maximale Länge des vorgelesenen Textes (Zeichen)</label>
-            <input id="maxChars" type="number" min="500" max="20000" step="100" />
+            <input id="maxChars" type="number" min="500" max="20000" />
             <p class="hint">
               Sicherheitsgrenze: Eine längere Antwort wird am Satzende gekürzt. Zur Orientierung: 1.000 Wörter sind etwa
               7.500 Zeichen.
@@ -187,7 +190,7 @@
 
           <div class="field">
             <label for="responseTimeoutSec">Zeitlimit für die Antwort von Gemini (Sekunden)</label>
-            <input id="responseTimeoutSec" type="number" min="15" max="300" step="5" />
+            <input id="responseTimeoutSec" type="number" min="15" max="300" />
           </div>
 
           <div class="field check">
