@@ -8,7 +8,7 @@ Chrome-Erweiterung für YouTube: Ein Klick auf das Symbol, und die in YouTube ei
 - Zusätzlich zum Symbol in der Werkzeugleiste gibt es einen **Button „Vorlesen“ direkt in der Aktionsleiste unter dem Video** (neben „Ask“ bzw. „Teilen“).
 - Die **Sprache der Zusammenfassung ist einstellbar** (Standard: Deutsch). Die Erweiterung fordert Gemini ausdrücklich dazu auf und liest in derselben Sprache vor.
 - Die **Länge der Zusammenfassung richtet sich nach dem Video**: Standard sind 1.000 Wörter je 60 Minuten Video (mindestens 100, höchstens 2.000 Wörter), einstellbar.
-- Der Prompt enthält **Vorlese-Regeln**: Abkürzungen werden buchstabiert („K-I“ statt „ki“), Fachbegriffe wie „Harness“ bleiben unübersetzt, und fremdsprachige Wörter und Namen werden in ihrer Sprache ausgesprochen (siehe [Aussprache](#aussprache-abkürzungen-fachbegriffe-und-fremdwörter)).
+- Der Prompt enthält **Vorlese-Regeln**: Abkürzungen werden buchstabiert („K-I“ statt „ki“), gewöhnliche Wörter werden ins Deutsche übersetzt, nur eingebürgerte Fachbegriffe wie „Harness“ bleiben unübersetzt, und nicht deutsch klingende Wörter und Namen werden in ihrer Sprache ausgesprochen (siehe [Aussprache](#aussprache-abkürzungen-fachbegriffe-und-fremdwörter)).
 - Alle Einstellungen liegen in den Optionen der Erweiterung (Sprache, API-Key, Stimme, Tempo, Prompt …).
 - Ist „Ask“ nicht sichtbar, weil YouTube die Funktion in deiner Region nicht anbietet (Geofencing), weist die Erweiterung auf ein **VPN in die USA** hin.
 
@@ -106,7 +106,7 @@ Rechtsklick auf das Symbol → **Optionen** (oder `chrome://extensions` → Deta
 | Sprache | Sprache, in der Gemini antworten soll **und** in der vorgelesen wird (Deutsch, English, Français, Español, Italiano, Nederlands, Polski, Português, Русский, Türkçe, 日本語, 한국어, 中文). Beim Wechsel wird eine nicht passende Stimme zurückgesetzt | Deutsch (`de-DE`) |
 | Anfordern über | **Prompt** in der gewählten Sprache (empfohlen) oder der **Vorschlag „Video zusammenfassen“** von YouTube (Antwortsprache bestimmt YouTube). Klappt die gewählte Variante nicht, wird automatisch die andere versucht | Prompt |
 | Länge | Wie lang die Zusammenfassung sein soll, abhängig von der Videolänge: *x* Wörter je *y* Minuten Video, mindestens *m* und höchstens *n* Wörter. Die Erweiterung nennt Gemini die berechnete Wortzahl („in etwa 500 Wörtern“, gerundet auf 25); ist die Länge des Videos unbekannt (Livestream), sind es 300 Wörter. Die Optionen zeigen Beispiele | 1000 Wörter je 60 Minuten, mindestens 100, höchstens 2000 |
-| Vorlese-Regeln | Hängt Regeln an den Prompt: Abkürzungen buchstabieren, Fachbegriffe nicht übersetzen, fremdsprachige Wörter und Namen mit ihrer Sprache kennzeichnen (siehe [Aussprache](#aussprache-abkürzungen-fachbegriffe-und-fremdwörter)) | an |
+| Vorlese-Regeln | Hängt Regeln an den Prompt: Abkürzungen buchstabieren, gewöhnliche Wörter übersetzen und nur eingebürgerte Fachbegriffe im Original lassen, nicht deutsch ausgesprochene Wörter und Namen mit ihrer Sprache kennzeichnen (siehe [Aussprache](#aussprache-abkürzungen-fachbegriffe-und-fremdwörter)) | an |
 | Eigener Prompt | Ersetzt den Standard-Prompt vollständig, ohne versteckte Zusätze. Platzhalter: `{sprache}` (z. B. „Deutsch“), `{language}` (z. B. „German“), `{wörter}` (die aus der Videolänge berechnete Wortzahl) und `{regeln}` (die Vorlese-Regeln, leer bei ausgeschalteten Regeln), etwa „Fasse das Video auf {sprache} in {wörter} Wörtern zusammen, ohne Aufzählungen. {regeln}“ | leer |
 | Maximale Länge | Sicherheitsgrenze für den vorgelesenen Text: Längere Antworten werden am Satzende gekürzt | 20000 Zeichen |
 | **Google Text-to-Speech** | | |
@@ -134,8 +134,8 @@ Zwei Hinweise für ein Update von Version 1.1.x: Wer das alte Zeichenlimit von *
 Damit die Sprachausgabe nicht „ki“ sagt oder „Harness“ wie ein deutsches Wort liest, arbeiten Prompt und Erweiterung zusammen:
 
 1. **Abkürzungen:** Der Prompt bittet Gemini, buchstabierte Abkürzungen mit Bindestrichen zu schreiben (K-I, E-U, U-S-A, G-P-U) und als Wort gesprochene wie NASA normal zu lassen. Zusätzlich erkennt die Erweiterung Abkürzungen aus 2 bis 4 Großbuchstaben (KI, EU, GPU …) selbst, falls Gemini sie unverändert lässt. Ausgenommen sind eine kleine Wortliste (NASA, NATO, RAM, JSON …) und römische Zahlen. Gesprochen werden sie Buchstabe für Buchstabe.
-2. **Fachbegriffe:** Der Prompt verlangt, Begriffe aus Softwareentwicklung und künstlicher Intelligenz nicht zu übersetzen. „Harness“ bleibt „Harness“ und wird nicht zum „Programmgerüst“.
-3. **Fremdwörter und Namen:** Gemini kennzeichnet sie mit dem Sprachcode, etwa `{en|Harness}` oder `{it|Di Gianantonio}`. Die Erweiterung lässt die Stimme solche Wörter in ihrer Sprache lesen und entfernt die Klammern.
+2. **Übersetzen oder im Original lassen:** Der Prompt verlangt, alles ins Deutsche zu übersetzen, was eine gängige deutsche Entsprechung hat („machines“ wird zu „Maschinen“, „AI“ zu „K-I“). Nur eingebürgerte englische Fachbegriffe aus Softwareentwicklung und künstlicher Intelligenz bleiben im Original: „Harness“ bleibt „Harness“ und wird nicht zum „Programmgerüst“.
+3. **Fremdwörter und Namen:** Was danach nicht deutsch ausgesprochen wird, kennzeichnet Gemini mit dem Sprachcode der Herkunft, eine Markierung je Begriff oder Name, etwa `{en|Harness}`, `{en|Pull Request}` oder `{it|Di Gianantonio}`. Namen deutschsprachiger Personen (Riemann, Gauß) bleiben ohne Markierung. Die Erweiterung lässt die Stimme die markierten Wörter in ihrer Sprache lesen und entfernt die Klammern.
 
 Wie weit das geht, hängt vom Stimmentyp ab (so beschreibt es Google in der Dokumentation zu SSML):
 

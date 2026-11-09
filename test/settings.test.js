@@ -198,22 +198,43 @@ test('buildSummaryPrompt: nennt die aus der Videolänge berechnete Wortzahl', ()
   assert.match(en, /^Summarize this video in about 1000 words\. Respond in English as continuous prose/);
 });
 
-test('buildSummaryPrompt: Vorlese-Regeln – Abkürzungen buchstabieren, Fachbegriffe nicht übersetzen, Fremdwörter markieren', () => {
+test('buildSummaryPrompt: Vorlese-Regeln – Abkürzungen buchstabieren, alles Übliche übersetzen, nur eingebürgerte Fachbegriffe im Original', () => {
   const de = S.buildSummaryPrompt(S.normalizeSettings({}), { durationSec: 600 });
   assert.match(de, /Abkürzungen mit Bindestrichen \(K-I, E-U, U-S-A, G-P-U\)/);
   assert.match(de, /als Wort gesprochene normal \(NASA, NATO\)/);
-  assert.match(de, /Übersetze Fachbegriffe aus Softwareentwicklung und künstlicher Intelligenz nicht/);
-  assert.match(de, /englischen Originalbegriffe \(Harness, Prompt, Pull Request/);
-  assert.match(de, /nie „Programmgerüst“/);
-  assert.match(de, /\{en\|Harness\}.*\{it\|Di Gianantonio\}/);
+  // Issue #2: „machines“, „human experts“, „combinations“ und „AI“ blieben englisch stehen
+  assert.match(de, /Übersetze alles ins Deutsche, was eine gängige deutsche Entsprechung hat \(Maschinen, menschliche Experten, Kombinationen, K-I statt AI\)/);
+  // … während Harness, Prompt & Co. (Wunsch aus Version 1.2.0) weiterhin im Original bleiben
+  assert.match(de, /Ausnahme: eingebürgerte englische Fachbegriffe der Softwareentwicklung und künstlichen Intelligenz bleiben im Original/);
+  assert.match(de, /\(Harness, Prompt, Pull Request, Agent, Token; nie „Programmgerüst“ oder „Eingabeaufforderung“\)/);
+  assert.ok(
+    de.indexOf('Übersetze alles ins Deutsche') < de.indexOf('Ausnahme:') && de.indexOf('Ausnahme:') < de.indexOf('Kennzeichne'),
+    'Reihenfolge: erst übersetzen, dann die Ausnahme, erst danach markieren',
+  );
   assert.doesNotMatch(de, /\n/, 'alles in einer Zeile (das Ask-Panel zeigt die Frage als einen Block, die Echo-Erkennung arbeitet zeilenweise)');
-  assert.ok(de.length < 900, `Prompt bleibt handlich (${de.length} Zeichen)`);
+  assert.ok(de.length < 1000, `Prompt bleibt handlich (${de.length} Zeichen)`);
 
   const en = S.buildSummaryPrompt(S.normalizeSettings({ languageCode: 'fr-FR' }), { durationSec: 600 });
   assert.match(en, /\(A-I, E-U, U-S-A, G-P-U\)/);
-  assert.match(en, /keep the original English terms/);
-  assert.match(en, /\{en\|harness\}/);
+  assert.match(en, /Translate everything that has a common equivalent in the answer language, including ordinary words and technical terms/);
+  assert.match(en, /Exception: established English terms from software development and artificial intelligence stay in the original \(harness, prompt, pull request, agent, token\)/);
   assert.doesNotMatch(en, /Abkürzungen/);
+  assert.ok(en.length < 1000, `Prompt bleibt handlich (${en.length} Zeichen)`);
+});
+
+test('buildSummaryPrompt: Vorlese-Regeln – markiert wird nur, was nicht deutsch klingt: Herkunftssprache, eine Markierung je Begriff, deutsche Namen nie', () => {
+  const de = S.buildSummaryPrompt(S.normalizeSettings({}), { durationSec: 600 });
+  // Issue #2: „{en|Riemann}“ ist falsch, Riemann war deutschsprachig
+  assert.match(de, /Kennzeichne nur Wörter und Namen, die nicht deutsch ausgesprochen werden, mit dem Sprachcode ihrer Herkunft/);
+  assert.match(de, /Namen deutschsprachiger Personen \(Riemann, Gauß\) bleiben ohne Markierung/);
+  // „{en|human} {en|experts}“ → ein Ausdruck, eine Markierung
+  assert.match(de, /eine Markierung je Begriff oder Name, nicht je Wort: \{en\|Harness\}, \{en\|Pull Request\}, \{it\|Di Gianantonio\}/);
+
+  const en = S.buildSummaryPrompt(S.normalizeSettings({ languageCode: 'fr-FR' }), { durationSec: 600 });
+  assert.match(en, /Mark only words and names that are not pronounced in the answer language/);
+  assert.match(en, /language code of their origin/);
+  assert.match(en, /one marker per term or name rather than per word: \{en\|harness\}, \{en\|pull request\}, \{it\|Di Gianantonio\}/);
+  assert.match(en, /Names that belong to the answer language are not marked\./);
 });
 
 test('buildSummaryPrompt: ohne Vorlese-Regeln steht nur die Aufforderung im Prompt', () => {
