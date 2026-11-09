@@ -67,10 +67,12 @@
             <div>
               <label for="speechRules">Vorlese-Regeln in den Prompt aufnehmen</label>
               <p class="hint" id="speechRulesHint">
-                Gemini schreibt buchstabierte Abkürzungen mit Bindestrichen (K-I statt KI), übersetzt Fachbegriffe aus
-                der Softwareentwicklung nicht (Harness bleibt Harness) und kennzeichnet fremdsprachige Wörter und Namen
-                mit ihrer Sprache, z. B. <code>{en|Harness}</code> oder <code>{it|Di Gianantonio}</code>. Die
-                Erweiterung liest diese Wörter dann in der jeweiligen Sprache vor. Das klappt mit Stimmen vom Typ
+                Gemini schreibt buchstabierte Abkürzungen mit Bindestrichen (K-I statt KI), übersetzt alles ins
+                Deutsche, was eine gängige deutsche Entsprechung hat, und lässt nur eingebürgerte englische Fachbegriffe
+                aus der Softwareentwicklung im Original (Harness bleibt Harness). Wörter und Namen, die nicht deutsch
+                ausgesprochen werden, kennzeichnet es mit ihrer Sprache, z. B. <code>{en|Harness}</code> oder
+                <code>{it|Di Gianantonio}</code>; deutsche Namen wie Riemann bleiben ohne Markierung. Die
+                Erweiterung liest die markierten Wörter dann in der jeweiligen Sprache vor. Das klappt mit Stimmen vom Typ
                 Standard, WaveNet und Neural2; bei Studio und Chirp 3 HD werden nur Abkürzungen buchstabiert. Die
                 Markierungen sind auch im Ask-Panel zu sehen.
               </p>

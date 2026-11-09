@@ -155,19 +155,29 @@
   // Regeln, damit sich die Zusammenfassung gut vorlesen lässt. Sie werden in den Prompt eingebaut (und ersetzen im
   // eigenen Prompt den Platzhalter {regeln}). Die Markierung {en|Wort} wertet speech-markup.js aus. Alles in einer
   // Zeile: Der Prompt erscheint als Frage im Ask-Panel, und die Erkennung des Echos arbeitet zeilenweise.
+  // Wichtig ist die Rangfolge: Zuerst wird übersetzt, im Original bleiben nur eingebürgerte Fachbegriffe, und nur
+  // was danach noch nicht deutsch ausgesprochen wird, bekommt eine Markierung. Ohne diese Reihenfolge ließ Gemini
+  // Alltagswörter („machines“, „human experts“) englisch stehen und markierte sogar deutsche Namen („Riemann“) und
+  // jedes Wort eines Ausdrucks einzeln.
   const SPEECH_RULES_DE =
     'Der Text wird vorgelesen. Schreibe buchstabierte Abkürzungen mit Bindestrichen (K-I, E-U, U-S-A, G-P-U), ' +
-    'als Wort gesprochene normal (NASA, NATO). Übersetze Fachbegriffe aus Softwareentwicklung und künstlicher ' +
-    'Intelligenz nicht, sondern verwende die englischen Originalbegriffe (Harness, Prompt, Pull Request, Agent, ' +
-    'Token; nie „Programmgerüst“ oder „Eingabeaufforderung“). Kennzeichne nicht eingedeutschte fremdsprachige Wörter ' +
-    'und Namen mit dem Sprachcode in geschweiften Klammern, z. B. {en|Harness}, {en|Pull Request}, {it|Di Gianantonio}.';
+    'als Wort gesprochene normal (NASA, NATO). Übersetze alles ins Deutsche, was eine gängige deutsche ' +
+    'Entsprechung hat (Maschinen, menschliche Experten, Kombinationen, K-I statt AI). Ausnahme: eingebürgerte ' +
+    'englische Fachbegriffe der Softwareentwicklung und künstlichen Intelligenz bleiben im Original (Harness, ' +
+    'Prompt, Pull Request, Agent, Token; nie „Programmgerüst“ oder „Eingabeaufforderung“). Kennzeichne nur Wörter ' +
+    'und Namen, die nicht deutsch ausgesprochen werden, mit dem Sprachcode ihrer Herkunft in geschweiften ' +
+    'Klammern, eine Markierung je Begriff oder Name, nicht je Wort: {en|Harness}, {en|Pull Request}, ' +
+    '{it|Di Gianantonio}. Namen deutschsprachiger Personen (Riemann, Gauß) bleiben ohne Markierung.';
 
   const SPEECH_RULES_EN =
     'The text will be read aloud. Write abbreviations that are spelled out with hyphens between the letters ' +
-    '(A-I, E-U, U-S-A, G-P-U) and abbreviations pronounced as words normally (NASA, NATO). Do not translate technical ' +
-    'terms from software development and artificial intelligence; keep the original English terms (harness, prompt, ' +
-    'pull request, agent, token). Mark foreign-language words and names that are not in the answer language and not in ' +
-    'common use there by putting the language code in curly braces, e.g. {en|harness}, {it|Di Gianantonio}.';
+    '(A-I, E-U, U-S-A, G-P-U) and abbreviations pronounced as words normally (NASA, NATO). Translate everything ' +
+    'that has a common equivalent in the answer language, including ordinary words and technical terms. ' +
+    'Exception: established English terms from software development and artificial intelligence stay in the ' +
+    'original (harness, prompt, pull request, agent, token). Mark only words and names that are not pronounced in ' +
+    'the answer language by putting the language code of their origin in curly braces, one marker per term or ' +
+    'name rather than per word: {en|harness}, {en|pull request}, {it|Di Gianantonio}. Names that belong to the ' +
+    'answer language are not marked.';
 
   /**
    * Die Frage an Gemini. Ein eigener Prompt hat Vorrang; darin werden ersetzt: {sprache} (z. B. „Deutsch“),
